@@ -1,5 +1,7 @@
 # 🌶️ Token Saver — OpenClaw Skill
 
+[English](README.md) | [中文](README_CN.md)
+
 An OpenClaw skill that reduces token consumption by 30-60% through automatic context compression, concise replies, and smart tool usage patterns.
 
 ## Key Features
@@ -39,6 +41,10 @@ Once installed, the skill is always active. It teaches the agent to:
 2. **Write to files** instead of keeping important info only in conversation memory
 3. **Respond concisely** — no filler phrases, length matched to complexity
 4. **Optimize tool usage** — combine commands, skip redundant reads, batch operations
+
+## References
+
+- [Token Pricing & Cost Analysis](references/token-pricing.md)
 
 ## Contributing
 

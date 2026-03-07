@@ -53,6 +53,10 @@ Before every reply, verify:
 - [ ] Not repeating information already in context
 - [ ] Not reading files already loaded in workspace context
 
+## References
+
+- For detailed token pricing, cost formulas, and waste analysis: see [references/token-pricing.md](references/token-pricing.md)
+
 ## Estimated Impact
 
 | Optimization | Token Reduction |
