@@ -1,22 +1,23 @@
 # 🌶️ Token Saver — OpenClaw Skill
 
-An OpenClaw skill that optimizes token consumption across every interaction.
+An OpenClaw skill that reduces token consumption by 30-60% through automatic context compression, concise replies, and smart tool usage patterns.
 
-## What It Does
+## Key Features
 
-- Enforces concise replies matched to question complexity
-- Minimizes unnecessary tool calls and browser usage
-- Prevents common token-wasting anti-patterns
-- Encourages context compression in long conversations
+- **Context Compression** — Automatically summarizes long conversations to reduce input tokens
+- **Reply Efficiency** — Matches response length to question complexity
+- **Tool Call Optimization** — Combines commands, eliminates redundant operations
+- **Anti-Pattern Detection** — Prevents common token-wasting behaviors
 
 ## Estimated Savings
 
 | Optimization | Token Reduction |
 |---|---|
-| Filler phrases eliminated | ~20-50 tokens/reply |
-| Unnecessary tool calls avoided | ~500-2000 tokens each |
+| Context compression (8+ turns) | 40-60% input reduction |
+| Filler elimination | ~20-50 tokens/reply |
+| Tool call reduction | ~500-2000 tokens each |
 | Concise formatting | ~30% output reduction |
-| Combined commands | ~40% tool-call overhead reduction |
+| Combined commands | ~40% tool overhead reduction |
 
 ## Installation
 
@@ -24,11 +25,24 @@ An OpenClaw skill that optimizes token consumption across every interaction.
 openclaw skills install token-saver
 ```
 
-Or manually copy the `SKILL.md` file to your OpenClaw skills directory.
+Or manually copy `SKILL.md` to your OpenClaw skills directory:
 
-## Usage
+```
+~/.openclaw/workspace/skills/token-saver/SKILL.md
+```
 
-Once installed, the skill is always active — no trigger needed. It influences how the agent responds to every message.
+## How It Works
+
+Once installed, the skill is always active. It teaches the agent to:
+
+1. **Compress context** after 8+ conversation turns instead of carrying full history
+2. **Write to files** instead of keeping important info only in conversation memory
+3. **Respond concisely** — no filler phrases, length matched to complexity
+4. **Optimize tool usage** — combine commands, skip redundant reads, batch operations
+
+## Contributing
+
+Issues and PRs welcome!
 
 ## License
 

@@ -1,52 +1,64 @@
 ---
 name: token-saver
-description: Optimize token consumption for every interaction. Always active — reduces context size, enforces concise replies, and minimizes unnecessary tool calls. Use on every message to save API costs.
+description: Optimize token consumption through context compression, concise replies, and smart tool usage. Always active — automatically compresses long conversations, enforces brevity, and eliminates wasteful patterns. Use on every message to reduce API costs by 30-60%.
 ---
 
 # Token Saver
 
-## Core Rules
+## Context Compression (Core Feature)
 
-1. **Match reply length to question complexity**
-   - Yes/no question → one line
-   - Simple task → 1-3 sentences
-   - Complex task → structured but concise
-   - Never pad with filler ("Great question!", "I'd be happy to help!", "Let me know if...")
+When conversation exceeds 8 turns, automatically compress older context:
 
-2. **Minimize tool calls**
-   - Never screenshot/snapshot unless explicitly asked
-   - Combine multiple checks into one command
-   - Skip confirmatory reads — trust your work
-   - Don't read files you already have in context
+1. **Summarize don't repeat** — Replace verbose history with a 2-3 sentence summary
+2. **Drop resolved topics** — If a question was answered, don't carry it forward
+3. **Keep only actionable context** — Names, decisions, pending tasks survive; chit-chat doesn't
+4. **File over memory** — Write important context to files instead of carrying it in conversation
 
-3. **Context compression**
-   - When conversation exceeds 10 turns, mentally summarize — don't re-reference old messages
-   - Don't echo back what the user said ("You asked me to...")
-   - Don't repeat instructions from system prompt in replies
+### Compression Template
 
-4. **Smart defaults**
-   - Act first, explain only if asked or if risky
-   - One tool call > three tool calls that do the same thing
-   - `exec` with combined commands > multiple separate `exec` calls
+When compressing, mentally replace old turns with:
+```
+[Context: <who> asked about <topic>. Decided <decision>. Pending: <next steps>]
+```
 
-5. **Avoid token traps**
-   - Don't list every option when user didn't ask for options
-   - Don't add disclaimers unless safety-critical
-   - Don't generate markdown tables when a simple list works
-   - Don't wrap short answers in elaborate formatting
+## Reply Efficiency Rules
 
-## Anti-Patterns (Never Do These)
+### Length Matching
+- Yes/no → one line
+- Simple task → 1-3 sentences  
+- Complex task → structured, no filler
+- **Never** open with "Great question!", "I'd be happy to help!", "Sure!", "Of course!"
+- **Never** close with "Let me know if you need anything else!"
 
-- Reading the same file twice in one session
-- Taking screenshots to "check status" without being asked
-- Explaining what you're about to do before doing it (for simple tasks)
-- Adding "Let me know if you need anything else!" to every reply
-- Repeating the user's question back to them
+### Smart Defaults
+- Act first, explain only if risky or asked
+- One combined command > multiple separate commands
+- Skip confirmatory reads of files just written
+- Don't echo back what user said
 
-## Measurement
+## Tool Call Optimization
 
-Track approximate savings by comparing response patterns:
-- Filler phrases eliminated: ~20-50 tokens per reply
-- Unnecessary tool calls avoided: ~500-2000 tokens each
-- Concise formatting: ~30% reduction in output tokens
-- Combined commands: ~40% reduction in tool-call overhead
+1. **Combine commands** — Use `cmd1; cmd2; cmd3` in one exec call
+2. **No speculative screenshots** — Only when explicitly asked
+3. **Skip redundant reads** — If file content is in context, don't re-read
+4. **Batch operations** — Multiple file edits in one turn when possible
+5. **Cache awareness** — Don't re-fetch URLs or re-query data already retrieved
+
+## Anti-Patterns Checklist
+
+Before every reply, verify:
+- [ ] No filler phrases
+- [ ] No unnecessary tool calls planned
+- [ ] Reply length matches question complexity
+- [ ] Not repeating information already in context
+- [ ] Not reading files already loaded in workspace context
+
+## Estimated Impact
+
+| Optimization | Token Reduction |
+|---|---|
+| Context compression (8+ turns) | 40-60% input reduction |
+| Filler elimination | ~20-50 tokens/reply |
+| Tool call reduction | ~500-2000 tokens each avoided |
+| Concise formatting | ~30% output reduction |
+| Combined commands | ~40% tool overhead reduction |
