@@ -1,6 +1,11 @@
 ---
 name: token-saver
-description: Optimize token consumption through intelligent model routing, context compression, and smart optimization. Always active — automatically classifies question complexity, routes to cost-optimal models, compresses long conversations, and eliminates wasteful patterns. Use on every message to reduce API costs by 50-80%.
+description: >
+  Use when the user mentions API costs, token limits, budget constraints, reducing
+  AI spending, or when conversations grow long and expensive. Classifies each message
+  by complexity (simple/medium/complex), routes to the cheapest adequate model via
+  session_status, compresses context after 8+ turns, and eliminates filler text and
+  redundant tool calls to cut per-message token usage.
 ---
 
 # Token Saver
@@ -33,23 +38,20 @@ On every incoming message, evaluate complexity before responding:
 
 ### Routing Action
 
-After classifying, use `session_status` tool to switch model:
+After classifying, call the `session_status` tool to switch model:
 
-- **Level 1** → switch to cheapest available (e.g., `opencode/claude-haiku-3.5`, `gpt-4o-mini`)
-- **Level 2** → switch to balanced (e.g., `opencode/claude-sonnet-4`, `gpt-4o`)
-- **Level 3** → keep current or switch to strongest (e.g., `opencode/claude-opus-4-6`)
+```jsonc
+// Level 1 — cheap model
+{ "tool": "session_status", "parameters": { "model": "opencode/claude-haiku-3.5" } }
 
-After completing a complex task, **switch back to cheap model** for the next turn.
+// Level 2 — balanced model
+{ "tool": "session_status", "parameters": { "model": "opencode/claude-sonnet-4" } }
 
-### Cost Comparison
+// Level 3 — strongest model (keep current or switch)
+{ "tool": "session_status", "parameters": { "model": "opencode/claude-opus-4-6" } }
+```
 
-| Model | Input/1M | Output/1M | Relative Cost |
-|---|---|---|---|
-| Claude Haiku 3.5 | $0.80 | $4.00 | 1x (baseline) |
-| Claude Sonnet 4 | $3.00 | $15.00 | 3.75x |
-| Claude Opus 4 | $15.00 | $75.00 | 18.75x |
-
-**Impact:** If 70% of messages are simple/medium, routing saves 60-80% compared to always using Opus.
+After completing a complex task, **switch back to the cheap model** for the next turn. Verify the switch succeeded before responding — if the tool returns an error, fall back to the current model and note the failure.
 
 ## Context Compression
 
@@ -90,28 +92,18 @@ When compressing, mentally replace old turns with:
 4. **Batch operations** — Multiple file edits in one turn when possible
 5. **Cache awareness** — Don't re-fetch URLs or re-query data already retrieved
 
-## Anti-Patterns Checklist
+## Per-Reply Validation
 
-Before every reply, verify:
-- [ ] Complexity classified and model routed appropriately
-- [ ] No filler phrases
-- [ ] No unnecessary tool calls planned
-- [ ] Reply length matches question complexity
-- [ ] Not repeating information already in context
+Before sending every reply, run through these checks in order:
+
+1. **Classify** — Assign complexity level (L1/L2/L3) to the incoming message
+2. **Route** — Call `session_status` to switch model if needed; confirm the switch succeeded
+3. **Compress** — If turn count > 8, summarise older context before composing the reply
+4. **Draft** — Write the reply matching length to complexity; strip filler phrases
+5. **Audit tool calls** — Remove any redundant reads, unnecessary screenshots, or split commands that can be combined
+
+If any step fails (e.g., model switch errors), note it and proceed with the current model.
 
 ## References
 
 - For detailed token pricing, cost formulas, and waste analysis: see [references/token-pricing.md](references/token-pricing.md)
-
-## Estimated Impact
-
-| Optimization | Cost Reduction |
-|---|---|
-| **Intelligent model routing** | **60-80% on simple/medium tasks** |
-| Context compression (8+ turns) | 40-60% input reduction |
-| Filler elimination | ~20-50 tokens/reply |
-| Tool call reduction | ~500-2000 tokens each avoided |
-| Concise formatting | ~30% output reduction |
-| Combined commands | ~40% tool overhead reduction |
-
-**Total estimated savings: 50-80% on monthly API costs**
