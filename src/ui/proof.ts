@@ -1,13 +1,16 @@
 import type { ProofRecord, WorkspaceState } from "../types";
 import { compactNumber, currency, dateTime, escapeHtml } from "./format";
 import "./proof.css";
+import "./proof-storage.css";
 
 function recordCard(record: ProofRecord, state: WorkspaceState): string {
   const session = state.sessions.find((item) => item.id === record.sessionId);
   const after = record.after;
   const beforeTokens = record.before.inputTokens + record.before.outputTokens;
   const afterTokens = after ? after.inputTokens + after.outputTokens : undefined;
-  const change = afterTokens === undefined ? "Baseline only" : `${compactNumber(beforeTokens - afterTokens)} fewer tokens`;
+  const change = afterTokens === undefined
+    ? "Baseline only"
+    : `${compactNumber(beforeTokens - afterTokens)} fewer tokens`;
 
   return `
     <article class="proof-record">
@@ -31,16 +34,29 @@ function recordCard(record: ProofRecord, state: WorkspaceState): string {
     </article>`;
 }
 
+function storageLabel(state: WorkspaceState): string {
+  const storage = state.proofStorage;
+  if (!storage || storage.mode === "initializing") return "Opening ledger";
+  if (storage.mode === "sqlite") return "SQLite ready";
+  if (storage.mode === "fallback") return "Fallback active";
+  return "Browser storage";
+}
+
 export function proofView(state: WorkspaceState): string {
   const records = state.proofRecords ?? [];
   const baselines = records.filter((record) => record.status === "baseline").length;
   const verified = records.filter((record) => record.status === "verified").length;
+  const storage = state.proofStorage;
   return `
     <section class="proof-hero">
       <div>
         <span class="eyebrow">PROOF LEDGER</span>
         <h2>Measure outcomes, not compression claims.</h2>
         <p>Every imported session begins with an immutable baseline. Savings remain unverified until a later run records task outcome, retries, and usage after a specific strategy.</p>
+        <div class="proof-storage ${escapeHtml(storage?.mode ?? "initializing")}">
+          <span></span>
+          <div><strong>${storageLabel(state)}</strong><small>${escapeHtml(storage?.detail ?? "Preparing Proof storage.")}</small></div>
+        </div>
       </div>
       <div class="proof-summary">
         <span><strong>${baselines}</strong> baselines</span>
