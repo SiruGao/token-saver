@@ -23,17 +23,24 @@ Properties:
 - no shell is invoked;
 - no user-supplied arguments are accepted;
 - stdout and stderr are treated as diagnostic metadata;
-- no files are read or changed;
+- the response must identify itself as `rtk`;
 - no integration is initialized;
 - a detected binary is not automatically trusted or selected.
 
+A binary can therefore be **detected but unhealthy**. Only a healthy runtime may advance to a future preview gate.
+
 ## Stage 2 — Health check
 
-Planned.
+Partially implemented.
 
-A compatible adapter will verify:
+The current health check verifies:
 
-- the binary identifies itself as the expected RTK project;
+- the binary exists on the desktop PATH;
+- `rtk --version` exits successfully;
+- the first version-response token identifies the binary as `rtk`.
+
+A future compatibility health check must also verify:
+
 - the version is not blocked by the registry;
 - required commands are available;
 - telemetry remains disabled unless the user explicitly enabled it outside Token Saver;
@@ -43,9 +50,18 @@ The health check must not modify Codex, shell, repository, or user configuration
 
 ## Stage 3 — Preview
 
-Planned.
+Blocked pending side-effect isolation.
 
-Token Saver will provide RTK with a fixed synthetic or user-approved captured output and record:
+The upstream `rtk log` command accepts log content through stdin, but it also records each execution in RTK's local SQLite tracking database. Token Saver must therefore not describe a normal `rtk log` invocation as a side-effect-free Dry Run.
+
+Preview can advance only when one of these controls exists:
+
+1. an upstream no-track or dry-run flag;
+2. an isolated temporary RTK data directory confirmed by compatibility tests;
+3. a library-level filtering API that bypasses command tracking;
+4. explicit user approval that the preview will add a local RTK tracking record.
+
+Once isolated, Token Saver will record:
 
 - original content hash and token estimate;
 - preview content hash and token estimate;
@@ -54,7 +70,7 @@ Token Saver will provide RTK with a fixed synthetic or user-approved captured ou
 - exit status;
 - whether error messages, file paths, line numbers, and test failures remain visible.
 
-A preview is written to the Proof Ledger with status `preview`. It does not change an agent integration.
+A successful preview is written to the Proof Ledger with status `preview`. It does not change an agent integration.
 
 ## Stage 4 — Integration proposal
 
