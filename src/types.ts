@@ -125,6 +125,39 @@ export interface AppUpdateStatus {
   source: "github-release" | "signed-updater" | "unavailable";
 }
 
+export type ProofRecordStatus =
+  | "baseline"
+  | "preview"
+  | "applied"
+  | "verified"
+  | "rolled-back"
+  | "failed";
+
+export interface ProofSnapshot {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
+  estimatedCostUsd: number;
+  toolCalls: number;
+  repeatedReads: number;
+  repeatedResults: number;
+  taskStatus: SessionStatus;
+}
+
+export interface ProofRecord {
+  id: string;
+  sessionId: string;
+  createdAt: string;
+  status: ProofRecordStatus;
+  strategyId?: string;
+  strategyVersion?: string;
+  before: ProofSnapshot;
+  after?: ProofSnapshot;
+  reversible: boolean;
+  provenance: string[];
+}
+
 export interface AppSettings {
   theme: "dark" | "light" | "system";
   localOnly: boolean;
@@ -142,6 +175,7 @@ export interface WorkspaceState {
   findings: Finding[];
   integrations: Integration[];
   strategies?: CompressionStrategy[];
+  proofRecords?: ProofRecord[];
   settings: AppSettings;
   lastScanAt?: string;
   lastStrategyCheckAt?: string;
