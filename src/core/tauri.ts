@@ -10,6 +10,7 @@ export interface NativeAppUpdate {
 export interface NativeStrategyRuntime {
   strategyId: string;
   detected: boolean;
+  healthy: boolean;
   version?: string;
   detail: string;
 }
