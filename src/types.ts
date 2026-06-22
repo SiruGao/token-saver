@@ -9,7 +9,7 @@ export type AgentId =
 
 export type SessionStatus = "success" | "failed" | "unknown";
 export type FindingSeverity = "low" | "medium" | "high";
-export type ViewId = "dashboard" | "doctor" | "sessions" | "integrations" | "settings";
+export type ViewId = "dashboard" | "doctor" | "strategies" | "sessions" | "integrations" | "settings";
 
 export interface TokenUsage {
   input: number;
@@ -74,11 +74,45 @@ export interface Integration {
   detail: string;
 }
 
+export type StrategyMode = "external-cli" | "local-proxy" | "library" | "workspace-tool";
+export type StrategyRisk = "low" | "medium" | "high";
+export type StrategyState = "available" | "installed" | "update-available" | "disabled";
+
+export interface CompressionStrategy {
+  id: string;
+  name: string;
+  description: string;
+  repository: string;
+  license: string;
+  mode: StrategyMode;
+  risk: StrategyRisk;
+  state: StrategyState;
+  installedVersion?: string;
+  latestVersion?: string;
+  lastCheckedAt?: string;
+  homepage?: string;
+  installCommand?: string;
+  executable?: string;
+  capabilities: string[];
+  compatibleAgents: AgentId[];
+  recommendedFor: FindingType[];
+  enabled: boolean;
+  managedExternally: boolean;
+}
+
+export interface StrategyRecommendation {
+  strategyId: string;
+  findingType: FindingType;
+  reason: string;
+  confidence: "low" | "medium" | "high";
+}
+
 export interface AppSettings {
   theme: "dark" | "light" | "system";
   localOnly: boolean;
   telemetry: boolean;
   autoScan: boolean;
+  autoCheckStrategyUpdates: boolean;
   largeOutputThreshold: number;
   repeatedReadWindowMinutes: number;
 }
@@ -88,8 +122,10 @@ export interface WorkspaceState {
   sessions: AgentSession[];
   findings: Finding[];
   integrations: Integration[];
+  strategies: CompressionStrategy[];
   settings: AppSettings;
   lastScanAt?: string;
+  lastStrategyCheckAt?: string;
 }
 
 export interface NativeIntegration {
