@@ -2,6 +2,7 @@
 
 use serde::Serialize;
 use std::{env, path::PathBuf};
+use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +20,13 @@ struct SessionFile {
     path: String,
     modified_at: String,
     content: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppUpdateMetadata {
+    version: String,
+    current_version: String,
 }
 
 struct AgentDirectory {
@@ -103,9 +111,45 @@ fn scan_local_sessions() -> Vec<SessionFile> {
     Vec::new()
 }
 
+#[tauri::command]
+async fn check_app_update(app: tauri::AppHandle) -> Result<Option<AppUpdateMetadata>, String> {
+    let updater = app.updater().map_err(|error| error.to_string())?;
+    let update = updater.check().await.map_err(|error| error.to_string())?;
+    Ok(update.map(|available| AppUpdateMetadata {
+        version: available.version,
+        current_version: available.current_version,
+    }))
+}
+
+#[tauri::command]
+async fn install_app_update(app: tauri::AppHandle) -> Result<bool, String> {
+    let updater = app.updater().map_err(|error| error.to_string())?;
+    let Some(update) = updater.check().await.map_err(|error| error.to_string())? else {
+        return Ok(false);
+    };
+
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|error| error.to_string())?;
+    app.restart();
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![detect_integrations, scan_local_sessions])
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            detect_integrations,
+            scan_local_sessions,
+            check_app_update,
+            install_app_update
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Token Saver");
 }

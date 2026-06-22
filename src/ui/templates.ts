@@ -5,248 +5,66 @@ import { compactNumber, currency, dateTime, escapeHtml, percent } from "./format
 export const NAV_ITEMS: Array<{ id: ViewId; label: string; icon: string }> = [
   { id: "dashboard", label: "Dashboard", icon: "◫" },
   { id: "doctor", label: "Doctor", icon: "✦" },
+  { id: "strategies", label: "Strategies", icon: "⌁" },
   { id: "sessions", label: "Sessions", icon: "≡" },
   { id: "integrations", label: "Integrations", icon: "⌘" },
   { id: "settings", label: "Settings", icon: "⚙" },
 ];
 
-function nav(activeView: ViewId): string {
-  return NAV_ITEMS.map(
-    (item) => `
-      <button class="nav-item ${item.id === activeView ? "active" : ""}" data-nav="${item.id}">
-        <span class="nav-icon">${item.icon}</span>
-        <span>${item.label}</span>
-      </button>`,
-  ).join("");
+export function shell(active: ViewId, content: string, runtime: string): string {
+  const nav = NAV_ITEMS.map((item) => `<button class="nav-item ${item.id === active ? "active" : ""}" data-nav="${item.id}"><span class="nav-icon">${item.icon}</span><span>${item.label}</span></button>`).join("");
+  const title = NAV_ITEMS.find((item) => item.id === active)?.label ?? "Token Saver";
+  return `<div class="app-shell"><aside class="sidebar"><div class="brand"><div class="brand-mark">TS</div><div><strong>Token Saver</strong><span>V1 Preview</span></div></div><nav>${nav}</nav><div class="sidebar-foot"><div class="privacy-pill"><span></span>Local-first</div><small>${escapeHtml(runtime)}</small></div></aside><main class="main-area"><header class="topbar"><div><span class="eyebrow">CONTEXT EFFICIENCY</span><h1>${title}</h1></div><div class="top-actions"><button class="button ghost" id="import-button">Import</button><button class="button primary" id="scan-button">Detect tools</button></div></header><section class="content">${content}</section></main><div id="toast-root"></div></div>`;
 }
 
-export function shell(activeView: ViewId, content: string, runtime: string): string {
-  return `
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-mark">TS</div>
-          <div><strong>Token Saver</strong><span>Desktop v1</span></div>
-        </div>
-        <nav>${nav(activeView)}</nav>
-        <div class="sidebar-foot">
-          <div class="privacy-pill"><span></span> Local-first</div>
-          <small>${escapeHtml(runtime)} runtime</small>
-        </div>
-      </aside>
-      <main class="main-area">
-        <header class="topbar">
-          <div>
-            <span class="eyebrow">QUALITY-AWARE TOKEN EFFICIENCY</span>
-            <h1>${NAV_ITEMS.find((item) => item.id === activeView)?.label ?? "Token Saver"}</h1>
-          </div>
-          <div class="top-actions">
-            <button class="button ghost" id="import-button">Import transcript</button>
-            <button class="button primary" id="scan-button">Scan local agents</button>
-          </div>
-        </header>
-        <section class="content">${content}</section>
-      </main>
-      <div id="toast-root"></div>
-    </div>`;
-}
-
-function metric(label: string, value: string, detail: string, tone = "neutral"): string {
+function metric(label: string, value: string, detail: string, tone = ""): string {
   return `<article class="metric-card ${tone}"><span>${label}</span><strong>${value}</strong><small>${detail}</small></article>`;
 }
 
-function aggregate(state: WorkspaceState) {
-  const usage = state.sessions.reduce(
-    (total, session) => ({
-      input: total.input + session.usage.input,
-      output: total.output + session.usage.output,
-      cacheRead: total.cacheRead + session.usage.cacheRead,
-      cost: total.cost + session.usage.estimatedCostUsd,
-    }),
-    { input: 0, output: 0, cacheRead: 0, cost: 0 },
-  );
-  const avoidable = state.findings.reduce((total, item) => total + item.estimatedTokens, 0);
-  const totalTokens = usage.input + usage.output;
-  const successCount = state.sessions.filter((session) => session.status === "success").length;
-  return {
-    ...usage,
-    avoidable,
-    totalTokens,
-    successRate: state.sessions.length ? successCount / state.sessions.length : 0,
-    avoidableRate: totalTokens ? avoidable / totalTokens : 0,
-  };
-}
-
-function agentRows(sessions: AgentSession[]): string {
-  const byAgent = new Map<string, { tokens: number; cost: number; sessions: number }>();
-  for (const session of sessions) {
-    const current = byAgent.get(session.agent) ?? { tokens: 0, cost: 0, sessions: 0 };
-    current.tokens += session.usage.input + session.usage.output;
-    current.cost += session.usage.estimatedCostUsd;
-    current.sessions += 1;
-    byAgent.set(session.agent, current);
-  }
-  const max = Math.max(1, ...[...byAgent.values()].map((item) => item.tokens));
-  return [...byAgent.entries()]
-    .sort((left, right) => right[1].tokens - left[1].tokens)
-    .map(
-      ([agent, item]) => `
-      <div class="agent-row">
-        <div><span class="agent-dot ${agent}"></span><strong>${escapeHtml(agent)}</strong><small>${item.sessions} sessions</small></div>
-        <div class="bar-track"><span style="width:${Math.max(8, (item.tokens / max) * 100)}%"></span></div>
-        <span>${compactNumber(item.tokens)}</span>
-        <span>${currency(item.cost)}</span>
-      </div>`,
-    )
-    .join("");
-}
-
 export function dashboardView(state: WorkspaceState): string {
-  const totals = aggregate(state);
-  if (!state.sessions.length) return emptyState();
-  return `
-    <div class="metric-grid">
-      ${metric("Tokens observed", compactNumber(totals.totalTokens), `${state.sessions.length} local sessions`)}
-      ${metric("Estimated provider cost", currency(totals.cost), "Provider receipts not yet connected")}
-      ${metric("Avoidable input", compactNumber(totals.avoidable), `${percent(totals.avoidableRate)} of observed tokens`, "warning")}
-      ${metric("Task success", percent(totals.successRate), "Based on imported status signals", "positive")}
-    </div>
-    <div class="two-column">
-      <article class="panel span-2">
-        <div class="panel-head"><div><span class="eyebrow">USAGE BREAKDOWN</span><h2>Tokens by agent</h2></div><span class="muted">Input + output estimates</span></div>
-        <div class="agent-table">${agentRows(state.sessions)}</div>
-      </article>
-      <article class="panel">
-        <div class="panel-head"><div><span class="eyebrow">EFFICIENCY</span><h2>Doctor score</h2></div></div>
-        <div class="score-wrap">
-          <div class="score-ring" style="--score:${efficiencyScore(state.findings)}"><strong>${efficiencyScore(state.findings)}</strong><span>/100</span></div>
-          <div><strong>${state.findings.length} findings</strong><p>Focus on exact duplication and oversized outputs before enabling semantic compression.</p><button class="text-button" data-nav="doctor">Open Doctor →</button></div>
-        </div>
-      </article>
-      <article class="panel">
-        <div class="panel-head"><div><span class="eyebrow">RECENT ACTIVITY</span><h2>Latest sessions</h2></div></div>
-        <div class="session-mini-list">${state.sessions.slice(0, 4).map(sessionMini).join("")}</div>
-      </article>
-    </div>`;
+  if (!state.sessions.length) return `<div class="product-onboarding"><span class="eyebrow">TOKEN SAVER PREVIEW</span><h2>Find wasted AI context.</h2><p>Detect local tools, import a session, and let Doctor explain the waste.</p><div class="onboarding-actions"><button class="button primary" id="empty-scan">Detect tools</button><button class="button ghost" id="empty-import">Import session</button><button class="text-button" id="demo-button">Load demo</button></div></div>`;
+  const tokens = state.sessions.reduce((sum, item) => sum + item.usage.input + item.usage.output, 0);
+  const cost = state.sessions.reduce((sum, item) => sum + item.usage.estimatedCostUsd, 0);
+  const avoidable = state.findings.reduce((sum, item) => sum + item.estimatedTokens, 0);
+  const success = state.sessions.filter((item) => item.status === "success").length / state.sessions.length;
+  const high = state.findings.filter((item) => item.severity === "high").length;
+  const score = efficiencyScore(state.findings);
+  const top = state.findings[0];
+  return `<section class="protection-hero ${high ? "attention" : "healthy"}"><div><span class="eyebrow">PROTECTION STATUS</span><h2>${high ? `${high} high-impact issue${high === 1 ? "" : "s"}` : "Workspace looks healthy"}</h2><p>${state.sessions.length} sessions analyzed · score ${score}/100</p></div><div><button class="button primary" data-nav="doctor">Review Doctor</button><button class="button ghost" id="dashboard-import">Import session</button></div></section><div class="metric-grid">${metric("Tokens observed", compactNumber(tokens), `${state.sessions.length} sessions`)}${metric("Avoidable", compactNumber(avoidable), tokens ? percent(avoidable / tokens) : "0%", "warning")}${metric("Estimated cost", currency(cost), "local estimate")}${metric("Success signals", percent(success), "from transcripts", "positive")}</div><article class="panel next-action-card"><span class="eyebrow">NEXT ACTION</span><h2>${top ? escapeHtml(top.title) : "No immediate action"}</h2><p>${top ? escapeHtml(top.evidence) : "Doctor found no major context waste."}</p>${top ? `<button class="button primary" data-nav="doctor">Review finding</button>` : ""}</article>`;
 }
 
-function sessionMini(session: AgentSession): string {
-  return `<button class="session-mini" data-session="${session.id}"><span class="status ${session.status}"></span><div><strong>${escapeHtml(session.title)}</strong><small>${escapeHtml(session.agent)} · ${compactNumber(session.usage.input + session.usage.output)} tokens</small></div><span>›</span></button>`;
-}
-
-function emptyState(): string {
-  return `
-    <div class="empty-state">
-      <div class="empty-icon">TS</div>
-      <span class="eyebrow">TOKEN SAVER DESKTOP</span>
-      <h2>Find where your AI tokens go.</h2>
-      <p>Import a JSON/JSONL transcript or scan supported local agent directories. Everything stays on this device.</p>
-      <div><button class="button primary" id="empty-scan">Scan local agents</button><button class="button ghost" id="demo-button">Load demo workspace</button></div>
-    </div>`;
-}
-
-function severityBadge(severity: Finding["severity"]): string {
-  return `<span class="severity ${severity}">${severity}</span>`;
-}
-
-function findingCard(item: Finding): string {
-  return `
-    <article class="finding-card">
-      <div class="finding-top"><div>${severityBadge(item.severity)}<span class="finding-type">${escapeHtml(item.type)}</span></div><strong>${item.estimatedTokens ? `${compactNumber(item.estimatedTokens)} avoidable` : "Review"}</strong></div>
-      <h3>${escapeHtml(item.title)}</h3>
-      <p>${escapeHtml(item.description)}</p>
-      <div class="evidence"><span>Evidence</span>${escapeHtml(item.evidence)}</div>
-      <div class="recommendation"><span>Recommended action</span>${escapeHtml(item.recommendation)}</div>
-      ${item.sessionId ? `<button class="text-button" data-session="${item.sessionId}">Inspect session →</button>` : ""}
-    </article>`;
+function card(item: Finding): string {
+  return `<article class="finding-card"><div class="finding-top"><span class="severity ${item.severity}">${item.severity}</span><strong>${item.estimatedTokens ? `${compactNumber(item.estimatedTokens)} avoidable` : "Review"}</strong></div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description)}</p><div class="evidence"><span>Evidence</span>${escapeHtml(item.evidence)}</div><div class="recommendation"><span>Action</span>${escapeHtml(item.recommendation)}</div><div>${item.sessionId ? `<button class="text-button" data-session="${item.sessionId}">Inspect session</button>` : ""}<button class="button ghost" data-nav="strategies">Review strategies</button></div></article>`;
 }
 
 export function doctorView(state: WorkspaceState): string {
   const score = efficiencyScore(state.findings);
-  const avoidable = state.findings.reduce((total, item) => total + item.estimatedTokens, 0);
-  return `
-    <div class="doctor-hero">
-      <div class="score-ring large" style="--score:${score}"><strong>${score}</strong><span>/100</span></div>
-      <div><span class="eyebrow">TOKEN EFFICIENCY SCORE</span><h2>${score >= 80 ? "Healthy workspace" : score >= 55 ? "Optimization opportunities found" : "High token waste detected"}</h2><p>Doctor analyzes repeated context, file reads, tool output, instruction size, cache stability, and possible rework.</p></div>
-      <div class="doctor-summary"><span>Potentially avoidable</span><strong>${compactNumber(avoidable)}</strong><small>estimated tokens</small></div>
-    </div>
-    <div class="filter-row">
-      <span>${state.findings.length} findings</span>
-      <span class="muted">Read-only analysis · no automatic changes in V1</span>
-    </div>
-    <div class="finding-grid">${state.findings.length ? state.findings.map(findingCard).join("") : `<div class="panel"><h2>No findings yet</h2><p>Import or scan sessions to run Doctor.</p></div>`}</div>`;
+  return `<div class="doctor-hero"><div class="score-ring large" style="--score:${score}"><strong>${score}</strong><span>/100</span></div><div><span class="eyebrow">CONTEXT HEALTH</span><h2>Evidence before action</h2><p>Doctor diagnoses waste and keeps external strategies optional.</p></div></div><div class="finding-grid">${state.findings.length ? state.findings.map(card).join("") : `<article class="panel"><h2>No findings yet</h2><button class="button primary" id="doctor-import">Import transcript</button></article>`}</div>`;
 }
 
-function sessionRow(session: AgentSession): string {
-  return `
-    <button class="session-row" data-session="${session.id}">
-      <span class="status ${session.status}"></span>
-      <div><strong>${escapeHtml(session.title)}</strong><small>${escapeHtml(session.project)} · ${dateTime(session.startedAt)}</small></div>
-      <span class="agent-chip">${escapeHtml(session.agent)}</span>
-      <span>${session.durationMinutes} min</span>
-      <span>${compactNumber(session.usage.input + session.usage.output)}</span>
-      <span>${currency(session.usage.estimatedCostUsd)}</span>
-      <span>›</span>
-    </button>`;
+function row(item: AgentSession): string {
+  return `<button class="session-row" data-session="${item.id}"><span class="status ${item.status}"></span><div><strong>${escapeHtml(item.title)}</strong><small>${dateTime(item.startedAt)}</small></div><span class="agent-chip">${item.agent}</span><span>${compactNumber(item.usage.input + item.usage.output)}</span><span>${currency(item.usage.estimatedCostUsd)}</span><span>›</span></button>`;
 }
 
-export function sessionsView(state: WorkspaceState, selectedSessionId?: string): string {
-  const selected = selectedSessionId ? state.sessions.find((item) => item.id === selectedSessionId) : undefined;
-  if (selected) return sessionDetail(selected, state.findings.filter((item) => item.sessionId === selected.id));
-  return `
-    <article class="panel flush">
-      <div class="panel-head padded"><div><span class="eyebrow">LOCAL LEDGER</span><h2>Observed sessions</h2></div><span class="muted">${state.sessions.length} total</span></div>
-      <div class="session-table-head"><span></span><span>Task</span><span>Agent</span><span>Duration</span><span>Tokens</span><span>Cost</span><span></span></div>
-      <div class="session-list">${state.sessions.length ? state.sessions.map(sessionRow).join("") : `<div class="empty-row">No sessions imported.</div>`}</div>
-    </article>`;
+export function sessionsView(state: WorkspaceState, id?: string): string {
+  const item = id ? state.sessions.find((session) => session.id === id) : undefined;
+  if (item) return `<button class="text-button" id="back-to-sessions">← All sessions</button><div class="session-detail-head"><div><h2>${escapeHtml(item.title)}</h2><p>${dateTime(item.startedAt)} · ${item.durationMinutes} min</p></div><strong>${currency(item.usage.estimatedCostUsd)}</strong></div>`;
+  return `<article class="panel flush"><div class="panel-head padded"><h2>Observed sessions</h2><span>${state.sessions.length} total</span></div><div>${state.sessions.map(row).join("") || `<div class="empty-row">No sessions imported.</div>`}</div></article>`;
 }
 
-function sessionDetail(session: AgentSession, findings: Finding[]): string {
-  return `
-    <button class="text-button back-button" id="back-to-sessions">← All sessions</button>
-    <div class="session-detail-head">
-      <div><span class="agent-chip">${escapeHtml(session.agent)}</span><h2>${escapeHtml(session.title)}</h2><p>${escapeHtml(session.project)} · ${dateTime(session.startedAt)} · ${session.durationMinutes} minutes</p></div>
-      <div class="session-cost"><span>Estimated cost</span><strong>${currency(session.usage.estimatedCostUsd)}</strong></div>
-    </div>
-    <div class="metric-grid compact">
-      ${metric("Input", compactNumber(session.usage.input), "tokens")}
-      ${metric("Output", compactNumber(session.usage.output), "tokens")}
-      ${metric("Cache read", compactNumber(session.usage.cacheRead), "tokens")}
-      ${metric("Doctor findings", String(findings.length), "for this session", findings.length ? "warning" : "positive")}
-    </div>
-    <div class="two-column">
-      <article class="panel span-2"><div class="panel-head"><div><span class="eyebrow">TIMELINE</span><h2>Session events</h2></div></div><div class="timeline">${session.events.map((item) => `<div class="timeline-item"><span></span><div><strong>${escapeHtml(item.tool ?? item.role ?? item.type)}</strong><small>${compactNumber(item.estimatedTokens)} tokens · ${escapeHtml(item.path ?? item.type)}</small><p>${escapeHtml(item.content.slice(0, 240))}${item.content.length > 240 ? "…" : ""}</p></div></div>`).join("")}</div></article>
-      <article class="panel"><div class="panel-head"><div><span class="eyebrow">FINDINGS</span><h2>Session diagnosis</h2></div></div>${findings.length ? findings.map((item) => `<div class="compact-finding">${severityBadge(item.severity)}<strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.evidence)}</small></div>`).join("") : `<p class="muted">No session-specific findings.</p>`}</article>
-    </div>`;
-}
-
-function integrationCard(item: Integration): string {
-  const state = item.connected ? "Connected" : item.detected ? "Detected" : "Not detected";
-  return `
-    <article class="integration-card">
-      <div class="integration-logo">${item.name.slice(0, 2).toUpperCase()}</div>
-      <div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.detail)}</p>${item.path ? `<code>${escapeHtml(item.path)}</code>` : ""}</div>
-      <div class="integration-state ${item.connected ? "connected" : item.detected ? "detected" : ""}"><span></span>${state}</div>
-    </article>`;
+function integration(item: Integration): string {
+  return `<article class="integration-card"><div class="integration-logo">${item.name.slice(0, 2).toUpperCase()}</div><div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.detail)}</p></div><div class="integration-state ${item.detected ? "detected" : ""}"><span></span>${item.detected ? "Detected" : "Not detected"}</div></article>`;
 }
 
 export function integrationsView(state: WorkspaceState): string {
-  const detected = state.integrations.filter((item) => item.detected).length;
-  return `
-    <div class="integration-hero"><div><span class="eyebrow">AUTO-DETECTION</span><h2>${detected} local agents detected</h2><p>V1 scans common local directories. It does not upload transcript content or modify agent configuration.</p></div><button class="button primary" id="integration-scan">Rescan</button></div>
-    <div class="integration-grid">${state.integrations.map(integrationCard).join("")}</div>
-    <article class="panel notice"><strong>OpenClaw Skill remains an integration.</strong><p>The desktop application is now the product. <code>SKILL.md</code> is one optional adapter for OpenClaw behavior guidance.</p></article>`;
+  return `<div class="integration-hero"><div><span class="eyebrow">READ-ONLY DETECTION</span><h2>${state.integrations.filter((item) => item.detected).length} tools detected</h2><p>Token Saver checks directory existence only.</p></div><button class="button primary" id="integration-scan">Rescan</button></div><div class="integration-grid">${state.integrations.map(integration).join("")}</div>`;
 }
 
-function toggle(id: string, checked: boolean, disabled = false): string {
-  return `<label class="toggle"><input id="${id}" type="checkbox" ${checked ? "checked" : ""} ${disabled ? "disabled" : ""}/><span></span></label>`;
+function toggle(id: string, checked: boolean): string {
+  return `<label class="toggle"><input id="${id}" type="checkbox" ${checked ? "checked" : ""}/><span></span></label>`;
 }
 
 export function settingsView(state: WorkspaceState): string {
-  return `
-    <div class="settings-stack">
-      <article class="panel settings-section"><div><h2>Privacy</h2><p>Token Saver is local-first. V1 stores data in the app's local webview storage.</p></div><div class="setting-row"><div><strong>Local-only processing</strong><small>Keep analysis on this device.</small></div>${toggle("local-only", state.settings.localOnly, true)}</div><div class="setting-row"><div><strong>Anonymous telemetry</strong><small>Disabled by default and not implemented in V1.</small></div>${toggle("telemetry", state.settings.telemetry, true)}</div></article>
-      <article class="panel settings-section"><div><h2>Scanning</h2><p>Control local analysis thresholds.</p></div><div class="setting-row"><div><strong>Automatic scan on launch</strong><small>Detect agents when the desktop app opens.</small></div>${toggle("auto-scan", state.settings.autoScan)}</div><label class="field-row"><span>Large output threshold</span><input id="large-output-threshold" type="number" min="500" step="500" value="${state.settings.largeOutputThreshold}"/><small>estimated tokens</small></label></article>
-      <article class="panel settings-section danger-zone"><div><h2>Local data</h2><p>Export the current ledger or remove all imported sessions.</p></div><div><button class="button ghost" id="export-button">Export report</button><button class="button danger" id="clear-button">Clear local data</button></div></article>
-    </div>`;
+  const update = state.appUpdate;
+  return `<div class="settings-stack"><article class="panel settings-section"><div><h2>Updates</h2><p>Application and strategy metadata use separate channels.</p></div><div class="update-setting-block"><div><strong>Token Saver ${update?.currentVersion ?? "1.0.0"}</strong><small>${update?.available ? `Version ${update.latestVersion ?? "new"} available` : "No update alert"}</small></div><button class="button ghost" id="app-update-check">Check app</button></div><div class="update-setting-block"><div><strong>Strategy registry</strong><small>${state.lastStrategyCheckAt ? dateTime(state.lastStrategyCheckAt) : "Not checked"}</small></div><button class="button ghost" id="strategy-update-button">Refresh</button></div><div class="setting-row"><div><strong>Automatic app checks</strong></div>${toggle("auto-app-updates", state.settings.autoCheckAppUpdates !== false)}</div><div class="setting-row"><div><strong>Automatic strategy checks</strong></div>${toggle("auto-strategy-updates", state.settings.autoCheckStrategyUpdates !== false)}</div></article><article class="panel settings-section"><div><h2>Analysis</h2></div><div class="setting-row"><div><strong>Detect tools on launch</strong></div>${toggle("auto-scan", state.settings.autoScan)}</div><label class="field-row"><span>Large output threshold</span><input id="large-output-threshold" type="number" value="${state.settings.largeOutputThreshold}"/></label></article><article class="panel"><button class="button ghost" id="export-button">Export</button><button class="button danger" id="clear-button">Clear local data</button></article></div>`;
 }
