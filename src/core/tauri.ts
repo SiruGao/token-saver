@@ -7,9 +7,15 @@ export interface NativeAppUpdate {
   publishedAt?: string;
 }
 
+export interface NativeStrategyRuntime {
+  strategyId: string;
+  detected: boolean;
+  version?: string;
+  detail: string;
+}
+
 const CURRENT_VERSION = "1.0.0";
 const LATEST_RELEASE = "https://api.github.com/repos/SiruGao/token-saver/releases/latest";
-const RELEASE_URL_PREFIX = "https://github.com/SiruGao/token-saver/releases/";
 
 export function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window;
@@ -49,6 +55,11 @@ export async function detectNativeIntegrations(): Promise<NativeIntegration[]> {
 export async function scanNativeSessions(): Promise<NativeSessionFile[]> {
   if (!isTauriRuntime()) return [];
   return invoke<NativeSessionFile[]>("scan_local_sessions");
+}
+
+export async function detectNativeStrategyRuntimes(): Promise<NativeStrategyRuntime[]> {
+  if (!isTauriRuntime()) return [];
+  return invoke<NativeStrategyRuntime[]>("detect_strategy_runtimes");
 }
 
 export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
