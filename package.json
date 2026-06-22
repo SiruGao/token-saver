@@ -11,7 +11,7 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && npm test",
     "test": "node --import tsx --test src/**/*.test.ts",
     "registry:check": "node scripts/validate-strategy-registry.mjs",
     "registry:sync": "node scripts/sync-strategy-registry.mjs"
