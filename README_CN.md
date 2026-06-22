@@ -1,73 +1,91 @@
-# Token Saver 中文说明
+# Token Saver Desktop 中文说明
 
-> 项目的规范文档、架构与贡献体系以英文版 [README.md](README.md) 为准。本页仅提供简要中文说明。
+> 英文版 [README.md](README.md) 是规范文档，本页提供中文概览。
 
 ## 项目定位
 
-Token Saver 不再只定位为“压缩 Prompt 的工具”，而是面向 AI Agent 的**质量感知 Token 效率控制层**：
+Token Saver 是一款**本地优先的 AI Agent Token 效率控制软件**。
+
+我们不准备重新发明所有压缩算法，而是建立一个统一闭环：
 
 ```text
-发现浪费 → 安全优化 → 验证任务质量 → 对账真实成本
+Doctor 诊断
+→ Policy 选择
+→ Strategy Adapter 调用外部方案
+→ Proof 验证真实效果
 ```
 
-核心指标不是单次压缩率，而是：
+Doctor 负责判断 Token 浪费来自哪里；Strategy Hub 负责把诊断结果匹配给兼容的第三方压缩方案；后续 Proof 层负责比较 Token、费用、返工、延迟和任务成功率。
+
+核心指标不是压缩率，而是：
 
 ```text
-每个成功任务的成本（cost per successful task）
+每个成功任务的成本
+= 模型调用、重试、重读和返工的全部成本
+  ÷ 成功完成的任务数量
 ```
 
-如果压缩导致 Agent 重读文件、重复调用工具、返工或回答错误，那么这种“节省”并不成立。
+## V1 已完成
 
-## 当前状态
+- Dashboard：Token、估算费用、潜在浪费、任务状态和 Agent 分布；
+- Doctor：六类确定性浪费规则，提供证据和改进建议；
+- Strategy Hub：第三方策略注册表、风险等级、兼容信息、Doctor 推荐、上游版本检查和用户选择；
+- 初始策略：RTK、Headroom 和 Claw Compactor；
+- Sessions：单次任务的调用时间线与诊断结果；
+- Integrations：检测 Claude Code、Codex、OpenClaw、Hermes、OpenCode 和 Cursor 是否安装；
+- 明确导入：用户主动拖拽或选择 JSON、JSONL、TXT 会话文件；
+- usage 归一化：优先读取常见 Provider usage 字段，没有时才估算；
+- 本地保存、清除和 JSON 报告导出；
+- macOS、Windows 和 Linux 构建工作流。
 
-Token Saver 目前仍是一个早期 OpenClaw Skill，已经提供：
+V1 只负责观察、诊断、推荐和版本可见性，不会自动安装或执行第三方策略，也不会修改 Prompt、命令、工作区或 Agent 配置。
 
-- 根据任务复杂度选择模型的行为建议；
-- 长对话上下文整理；
-- 减少重复文件读取和工具调用；
-- 控制无效输出和冗余表达；
-- OpenClaw 兼容的 `SKILL.md`。
+## 核心竞争力
 
-下一阶段将开发 **Token Saver Doctor**，在本地扫描 Agent 会话和配置，识别：
+单纯收集几个压缩工具很容易被复制。真正的壁垒是：
 
-- 重复上下文和重复文件读取；
-- 破坏 Prompt Cache 的前缀变化；
-- 冗长的 MCP Tool Schema；
-- 测试、构建和命令日志膨胀；
-- 本地 Token 估算与 Provider 实际 usage 不一致；
-- 过度压缩引发的重试和返工。
+- 跨 Agent 的统一会话和任务数据结构；
+- Doctor 诊断与策略效果之间的长期数据；
+- 不同策略、版本、Agent、模型和内容类型之间的兼容矩阵；
+- 安全更新、健康检查、固定版本、灰度使用和回滚；
+- 以“每个成功任务的成本”衡量效果，而不是只展示 Token 压缩比例；
+- 不绑定单一压缩厂商的中立策略层。
 
-## 安装当前 OpenClaw Skill
+详细设计见 [docs/STRATEGY_HUB.md](docs/STRATEGY_HUB.md)。
+
+## 运行
 
 ```bash
-openclaw skills install token-saver
+npm install
+npm run dev          # 网页预览
+npm run desktop:dev  # 桌面开发模式
+npm run desktop:build
 ```
 
-或手动安装：
+构建结果位于：
 
-```bash
-mkdir -p ~/.openclaw/workspace/skills/token-saver
-cp SKILL.md ~/.openclaw/workspace/skills/token-saver/SKILL.md
+```text
+src-tauri/target/release/bundle/
 ```
 
-当前 Skill 属于行为策略层，不会拦截所有真实 API 请求。实际节省取决于模型、Provider、Agent、任务类型、缓存行为以及宿主是否支持模型切换。
+## 隐私
 
-## 差异化
+- 不需要账号；
+- V1 没有遥测；
+- 分析在本地运行；
+- 不上传会话文件；
+- 原生端只判断已知应用目录是否存在，不读取其中的文件；
+- 只有用户明确选择或拖入的会话文件才会进入分析器；
+- 策略更新检查只读取公开的 GitHub Release 元数据；
+- 可以在 Settings 中导出或删除本地数据。
 
-Token Saver 计划把以下能力放在一个闭环里：
+## OpenClaw Skill
 
-1. **Doctor**：解释 Token 浪费发生在哪里；
-2. **Gateway**：使用去重、缓存对齐、差分上下文、延迟加载工具定义和局部可逆压缩进行优化；
-3. **Proof Ledger**：记录原始输入、优化后输入、Provider usage、重试、延迟和任务结果；
-4. **Quality Guard**：发现压缩后重复调用、重读和任务失败，必要时自动回退原文。
+原来的 `SKILL.md` 继续保留，但它现在只是一个可选的 OpenClaw 集成，不是产品本体。
 
-## 项目文档
+## 当前限制
 
-- [Canonical English README](README.md)
-- [Product Roadmap](ROADMAP.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Benchmark Policy](docs/BENCHMARKS.md)
-- [Contributing](CONTRIBUTING.md)
+V1 还不会执行策略适配器、自动安装上游工具、自动导入会话、代理模型请求、执行压缩、接入 Provider 账单、进行 A/B 质量回放或提供已签名公开安装包。
 
 ## 许可
 
