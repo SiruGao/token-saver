@@ -101,6 +101,7 @@ export interface CompressionStrategy {
   installCommand?: string;
   executable?: string;
   runtimeDetected?: boolean;
+  runtimeHealthy?: boolean;
   runtimeVersion?: string;
   runtimeCheckedAt?: string;
   runtimeDetail?: string;
