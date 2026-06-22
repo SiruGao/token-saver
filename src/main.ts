@@ -4,6 +4,7 @@ import { analyzeSessions, parseTranscript } from "./core/import-router";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
 import { checkNativeAppUpdate, detectNativeIntegrations, isTauriRuntime, runtimeLabel } from "./core/tauri";
 import { demoWorkspace, emptyWorkspace } from "./data/demo";
+import { syncBaselineRecords } from "./proof/ledger";
 import { mergeStrategyRegistry } from "./strategies/registry";
 import { checkStrategyUpdates } from "./strategies/updates";
 import type { AgentSession, ViewId, WorkspaceState } from "./types";
@@ -19,6 +20,7 @@ const transcriptInput = transcriptNode;
 const hydrate = (value: WorkspaceState): WorkspaceState => ({
   ...value,
   strategies: mergeStrategyRegistry(value.strategies),
+  proofRecords: value.proofRecords ?? [],
   settings: {
     ...value.settings,
     autoCheckAppUpdates: value.settings.autoCheckAppUpdates ?? true,
@@ -64,7 +66,12 @@ async function importFiles(files: FileList | File[]): Promise<void> {
   const indexed = new Map(state.sessions.map((session) => [session.id, session]));
   for (const session of imported) indexed.set(session.id, session);
   const sessions = [...indexed.values()].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
-  if (imported.length) commit({ ...state, sessions, findings: analyzeSessions(sessions, state.settings.largeOutputThreshold) });
+  if (imported.length) {
+    const findings = analyzeSessions(sessions, state.settings.largeOutputThreshold);
+    const proofRecords = syncBaselineRecords(sessions, findings, state.proofRecords);
+    commit({ ...state, sessions, findings, proofRecords });
+    toast(`Imported ${imported.length} session${imported.length === 1 ? "" : "s"} and recorded baselines.`, "success");
+  }
 }
 
 async function detectTools(): Promise<void> {
