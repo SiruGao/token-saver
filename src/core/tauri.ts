@@ -28,9 +28,8 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
 }
 
 function numericVersion(value: string): number[] {
-  return value
-    .replace(/^v/, "")
-    .split("-")[0]
+  const stablePart = value.replace(/^v/, "").split("-")[0] ?? "";
+  return stablePart
     .split(".")
     .map((part) => Number.parseInt(part, 10) || 0);
 }
