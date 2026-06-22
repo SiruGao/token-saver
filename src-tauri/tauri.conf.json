@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https://api.github.com"
+      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https://api.github.com https://raw.githubusercontent.com"
     }
   },
   "bundle": {
@@ -33,5 +33,16 @@
     "shortDescription": "Diagnose token waste and coordinate external compression strategies.",
     "longDescription": "A local-first desktop control plane that diagnoses AI-agent token waste, recommends compatible compression strategies, tracks updates, and measures cost per successful task.",
     "copyright": "Copyright © 2026 SiruGao"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "__TOKEN_SAVER_UPDATER_PUBLIC_KEY__",
+      "endpoints": [
+        "https://github.com/SiruGao/token-saver/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
