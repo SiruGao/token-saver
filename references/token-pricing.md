@@ -1,75 +1,175 @@
-# Token Pricing & Cost Reference
+# Token Cost and Measurement Reference
 
-## How Tokens Work
+Model prices, cache rules, reasoning-token accounting, and batch discounts change frequently. Token Saver should not embed a price table as permanent truth.
 
-1 token ≈ 4 characters (English) or ≈ 1-2 characters (Chinese/CJK)
+For current prices, use the official pricing page of the model provider and record the price version or retrieval date in benchmark artifacts.
 
-Every API call costs = **input tokens + output tokens**
+## What can be billed
 
-Input tokens include: system prompt + conversation history + tool results + your message
+Depending on the provider and model, a request may include separate accounting for:
 
-This means: **longer conversations get exponentially more expensive** because the full history is sent every turn.
+- uncached input tokens;
+- cache creation or write tokens;
+- cached input or cache-read tokens;
+- reasoning tokens;
+- visible output tokens;
+- image, audio, or other modality units;
+- tool calls or hosted-tool usage;
+- batch or priority-processing adjustments.
 
-## Model Pricing (per 1M tokens, as of 2025)
+Do not assume that:
 
-| Model | Input | Output | Notes |
-|---|---|---|---|
-| Claude Opus 4 | $15.00 | $75.00 | Most expensive, highest quality |
-| Claude Sonnet 4 | $3.00 | $15.00 | Best price/performance |
-| Claude Haiku 3.5 | $0.80 | $4.00 | Cheapest Claude |
-| GPT-4o | $2.50 | $10.00 | OpenAI mainstream |
-| GPT-4o-mini | $0.15 | $0.60 | Budget option |
-| DeepSeek V3 | $0.27 | $1.10 | Very cheap |
+```text
+cost = input tokens + output tokens
+```
 
-## Where Tokens Get Wasted
+is sufficient for every provider.
 
-### 1. System Prompt Overhead (every turn)
-A typical OpenClaw setup sends 3000-8000 tokens of system prompt **every single message**. With AGENTS.md, SOUL.md, USER.md, skills, etc.
+## What enters agent context
 
-**Optimization:** Keep workspace files concise. Every word in AGENTS.md costs money on every turn.
+Typical input sources include:
 
-### 2. Conversation History Growth
-| Turn | Approx Input Tokens | Cost (Opus) |
-|---|---|---|
-| Turn 1 | 5,000 | $0.075 |
-| Turn 5 | 15,000 | $0.225 |
-| Turn 10 | 35,000 | $0.525 |
-| Turn 20 | 80,000 | $1.200 |
-| Turn 50 | 200,000 | $3.000 |
+- system and developer instructions;
+- project instruction files such as `AGENTS.md` or `CLAUDE.md`;
+- conversation history;
+- tool definitions and MCP schemas;
+- tool results;
+- retrieved documents and RAG chunks;
+- files, diffs, logs, images, and user messages.
 
-**Optimization:** Context compression after 8+ turns can reduce this by 40-60%.
+The same logical content may be sent repeatedly across turns. This repeated transmission is one of the most important targets for diagnosis.
 
-### 3. Tool Call Overhead
-Each tool call adds tokens: the call itself (~100-500 tokens) + the result (~200-5000 tokens).
+## Token estimates versus billing truth
 
-| Tool | Typical Token Cost |
-|---|---|
-| exec (simple command) | 300-800 |
-| exec (long output) | 1000-5000 |
-| browser snapshot | 2000-10000 |
-| browser screenshot | 1000-3000 |
-| web_fetch | 1000-5000 |
-| file read | 500-3000 |
+Local tokenizers are useful for:
 
-**Optimization:** Combine commands, skip unnecessary reads, avoid speculative screenshots.
+- comparing content before and after a transformation;
+- deciding whether a request may exceed a context limit;
+- estimating the likely impact of a rule;
+- identifying unusually large prompt segments.
 
-### 4. Filler Text
-Common filler phrases and their token cost per occurrence:
+They are not always equal to provider billing because providers may apply:
 
-| Phrase | Tokens |
-|---|---|
-| "Great question! I'd be happy to help with that." | ~12 |
-| "Let me know if you need anything else!" | ~10 |
-| "Sure! Of course! Absolutely!" | ~6 |
-| Repeating the user's question back | ~20-50 |
+- different tokenizer versions;
+- prompt caching;
+- hidden protocol or tool overhead;
+- reasoning-token accounting;
+- provider-side routing or pricing tiers;
+- minimum billing units or modality-specific rules.
 
-Over 50 turns, filler alone can waste 500-2000 tokens.
+Use the following labels consistently:
 
-## Cost Saving Formulas
+- **estimated** — calculated locally;
+- **measured** — observed directly in a controlled experiment;
+- **provider-reported** — returned by the provider or billing system.
 
-**Monthly cost estimate:**
-`messages_per_day × avg_tokens_per_message × price_per_token × 30`
+Provider-reported usage is the accounting source of truth.
 
-**Example:** 50 messages/day × 20K avg tokens × $15/M (Opus input) × 30 = **$450/month**
+## Common waste categories
 
-With token-saver optimizations (40% reduction): **$270/month** → saves $180/month
+### 1. Repeated stable context
+
+Examples:
+
+- the same instruction files sent every turn;
+- unchanged source files reread in full;
+- repeated tool results;
+- quoted conversation history already present elsewhere.
+
+Safer optimizations:
+
+- exact deduplication;
+- delta context;
+- persistent references;
+- cache-friendly stable prefixes.
+
+### 2. Prompt-cache misses
+
+Stable prompt content may lose cache value when:
+
+- tool definitions are reordered;
+- timestamps or random identifiers appear in the stable prefix;
+- equivalent instructions are rewritten every turn;
+- dynamic task content is inserted before stable content;
+- requests move across incompatible provider endpoints.
+
+Measure actual cached usage instead of inferring a cache hit from prompt similarity alone.
+
+### 3. Tool-schema overhead
+
+Large tool catalogs can add substantial input even when most tools are never called.
+
+Safer optimizations:
+
+- lazy-load tools by task;
+- shorten descriptions without removing constraints;
+- use compact schemas;
+- expose a tool-search or registry layer;
+- measure tool-selection accuracy after pruning.
+
+### 4. Noisy tool output
+
+High-volume sources include:
+
+- test and build logs;
+- stack traces;
+- directory trees;
+- search results;
+- repeated warnings;
+- large JSON responses;
+- progress indicators and successful-case output.
+
+Prefer deterministic, structure-aware compaction. Preserve errors, counts, locations, exit status, and a route to the original content.
+
+### 5. Rework caused by optimization
+
+A transformation is not a saving when it causes:
+
+- repeated tool calls;
+- repeated file reads;
+- retrieval of the original content;
+- repair turns;
+- task failure;
+- longer wall-clock time that outweighs the cost reduction.
+
+This is why Token Saver evaluates the full task rather than one request.
+
+## Cost calculations
+
+For a task containing multiple requests:
+
+```text
+total task cost
+= sum(provider-reported cost for every request, retry, and repair turn)
+```
+
+```text
+cost per successful task
+= total cost across the evaluated runs
+  / number of successful runs
+```
+
+```text
+quality-adjusted saving
+= 1 - optimized cost per successful task
+      / baseline cost per successful task
+```
+
+If the optimized configuration reduces task success to zero, quality-adjusted saving is undefined and the result must be reported as a regression.
+
+## Benchmark record
+
+Every price-sensitive result should preserve:
+
+- provider;
+- model identifier;
+- date;
+- input, cache, reasoning, and output usage fields;
+- unit prices used;
+- currency;
+- baseline and optimized configuration;
+- task success;
+- retries and rework;
+- raw aggregate artifacts.
+
+See [../docs/BENCHMARKS.md](../docs/BENCHMARKS.md) for the project evaluation policy.
