@@ -1,8 +1,8 @@
 # Token Saver Roadmap
 
-Token Saver is moving from an advisory OpenClaw skill toward a measurable, quality-aware token efficiency layer for AI agents.
+Token Saver is now a local-first desktop application for observing, diagnosing, and eventually reducing AI-agent token waste.
 
-The roadmap is intentionally ordered from low-risk observation to higher-risk runtime optimization. We will not begin with aggressive semantic compression. First we need reliable measurement, provider reconciliation, and evidence that an optimization does not increase retries or reduce task success.
+The roadmap moves from low-risk measurement to runtime optimization. The project will not begin with aggressive semantic compression: first it must measure real sessions, preserve provider usage, and detect whether an optimization increases retries or reduces task success.
 
 ## Product thesis
 
@@ -12,131 +12,106 @@ The primary metric is not compression ratio. It is:
 cost per successful task
 ```
 
-A task includes all retries, repeated tool calls, rereads, model switches, and repair turns required to reach a valid outcome.
+A task includes every model request, retry, repeated tool call, reread, model switch, and repair turn required to reach a valid outcome.
 
-## Phase 0 — Advisory skill
+## V1 — Desktop Analyzer and Doctor
 
-**Status: available**
+**Status: delivered in the Desktop V1 branch**
 
-Deliverables:
+V1 establishes Token Saver as a downloadable desktop product rather than a standalone skill.
 
-- OpenClaw-compatible `SKILL.md`
-- task-complexity guidance for model selection
-- context hygiene for long conversations
-- concise-response rules
-- tool-call and file-read discipline
+Delivered capabilities:
 
-Exit criteria:
+- Tauri 2 desktop shell for macOS, Windows, and Linux;
+- Dashboard, Doctor, Sessions, Integrations, and Settings views;
+- local JSON, JSONL, and text transcript import;
+- read-only scanning of common agent directories;
+- integration detection for Claude Code, Codex, OpenClaw, Hermes, OpenCode, and Cursor;
+- normalized session and event model;
+- provider usage ingestion when common usage fields are present;
+- token estimation fallback;
+- six deterministic Doctor rule families;
+- local persistence, deletion, and JSON report export;
+- demo workspace;
+- CI and cross-platform bundle workflows.
 
-- documentation clearly separates guidance from measured runtime savings;
-- no unverified savings claim is presented as benchmark evidence.
+V1 limitations:
 
-## Phase 1 — Token Saver Doctor
+- generic parsing rather than version-specific parsers for every agent;
+- local webview storage rather than SQLite;
+- no provider proxy or automatic prompt modification;
+- no verified savings claim;
+- no signed public installer artifacts yet.
+
+See [docs/V1.md](docs/V1.md).
+
+## V1.1 — Reliable adapters and local ledger
 
 **Status: next milestone**
 
-A local-first diagnostic CLI that scans supported agent transcripts and configuration.
+Planned deliverables:
 
-Initial detections:
-
-- repeated full-file reads;
-- repeated tool results;
-- oversized system prompts and instruction files;
-- unstable prompt prefixes that reduce cache reuse;
-- unused or oversized MCP tool schemas;
-- verbose test, build, and command output;
-- long resolved conversation branches still carried forward;
-- local token estimates that disagree with provider usage.
-
-Planned commands:
-
-```bash
-token-saver doctor
-token-saver doctor --agent claude-code
-token-saver doctor --format json
-```
+- fixture-tested parsers for Claude Code and Codex first;
+- SQLite ledger with project-level isolation;
+- stable task inference across multi-turn sessions;
+- explicit separation of estimated, measured, and provider-reported usage;
+- CSV and content-free aggregate export;
+- parser compatibility metadata by agent version;
+- MCP schema inventory and unused-tool diagnostics.
 
 Exit criteria:
 
-- at least two agent adapters;
-- documented event schema;
-- fixture-based parser tests;
-- findings include evidence, confidence, and an actionable remediation;
-- no session content leaves the machine by default.
+- at least two reliable adapters with sanitized fixtures;
+- provider usage fields preserved without double counting;
+- imported sessions survive application upgrades;
+- findings include evidence, confidence, remediation, and false-positive guidance.
 
-## Phase 2 — Proof Ledger
-
-**Status: planned**
-
-A unified local ledger that records:
-
-- original input size;
-- optimized input size;
-- provider-reported input, cached, reasoning, and output usage where available;
-- model and provider;
-- tool-call sequence;
-- retries and repeated reads;
-- latency;
-- task outcome.
-
-Exit criteria:
-
-- provider-reported usage is preserved as the accounting source of truth;
-- estimates are explicitly labeled;
-- data can be exported as JSON/CSV;
-- sensitive content can be omitted while retaining aggregate metrics.
-
-## Phase 3 — Safe Gateway
+## V1.2 — Safe optimization layer
 
 **Status: planned**
-
-A local proxy or adapter layer that applies low-risk transformations before requests reach the model.
 
 Optimization order:
 
-1. exact duplicate removal;
+1. exact duplicate suppression;
 2. prompt-prefix normalization for cache stability;
 3. delta context for changed files and repeated content;
 4. lazy loading of tool schemas;
 5. deterministic log, JSON, and file-tree compaction;
-6. reversible content references;
-7. semantic compression only after the previous layers are measurable.
+6. reversible local references;
+7. semantic compression only after lower-risk layers are measured.
 
 Safety requirements:
 
-- fail open on unknown request shapes or transformation errors;
-- preserve original content locally when reversible retrieval is enabled;
-- project-level cache isolation;
-- per-rule opt-out;
-- request-level provenance explaining every transformation.
+- fail open on unknown formats or transformation errors;
+- preserve originals locally when retrieval is enabled;
+- isolate caches by project and identity;
+- allow per-rule opt-out;
+- record provenance for every transformation;
+- detect rereads and repeated calls as possible over-compression signals.
 
-Exit criteria:
-
-- baseline and optimized replay support;
-- no silent request loss;
-- adapter compatibility tests;
-- quality regressions automatically disable the responsible rule.
-
-## Phase 4 — Quality Guard and Replay
+## V2 — Gateway, Quality Guard, and Proof Ledger
 
 **Status: planned**
 
 Deliverables:
 
-- baseline versus optimized A/B replay;
-- detection of repeated tool calls caused by missing compressed detail;
+- local provider gateway and agent adapters;
+- baseline versus optimized replay;
+- holdout traffic for honest counterfactual measurement;
 - task-specific success checks;
+- provider cost reconciliation;
 - cost-per-success dashboard;
-- compression ratio versus task-success curves;
-- holdout traffic for honest counterfactual measurement.
+- automatic disabling of rules associated with regressions;
+- reproducible benchmark artifacts.
 
 Exit criteria:
 
-- public, reproducible benchmark suite;
-- results include failures and confidence intervals;
-- every headline claim links to raw benchmark artifacts.
+- no silent request loss;
+- baseline and optimized task outcomes are comparable;
+- headline claims include failure counts and reproduction instructions;
+- verified savings account for retries, rereads, and repair turns.
 
-## Phase 5 — Enterprise and offline lanes
+## V3 — Team and enterprise lanes
 
 **Status: exploring**
 
@@ -145,32 +120,24 @@ Potential capabilities:
 - self-hosted and air-gapped deployment;
 - CI/CD and pull-request review optimization;
 - asynchronous and batch model lanes;
-- budget guards and circuit breakers;
-- team-level provider reconciliation;
+- team budgets and circuit breakers;
+- provider billing reconciliation;
 - audit logs, redaction, retention policies, and original-content retrieval;
-- policy controls by repository, team, model, and task class.
+- policies by repository, team, model, and task class.
 
-## Initial integration order
+## OpenClaw Skill
 
-1. OpenClaw
-2. Claude Code
-3. OpenAI Codex
-4. OpenCode
-5. Hermes Agent
-6. MCP-native clients
-7. Cursor, Cline, and Roo Code
+The existing `SKILL.md` remains available as an optional OpenClaw integration for model selection, context hygiene, concise output, and tool discipline. It is not the product core.
 
-The order may change based on contributor access to stable transcript formats and reproducible fixtures.
-
-## Non-goals for the first releases
+## Non-goals
 
 - claiming a universal savings percentage;
-- replacing model providers or agent interfaces;
-- uploading private session content to a hosted service by default;
+- uploading private session content by default;
 - black-box summarization without provenance or recovery;
-- optimizing only for the smallest possible prompt;
-- supporting every agent before two integrations are reliable.
+- optimizing only for the smallest prompt;
+- silently changing user prompts or agent configuration;
+- presenting local estimates as provider billing truth.
 
 ## How to help
 
-The fastest way to move the roadmap forward is to contribute sanitized transcript fixtures, agent log parsers, provider usage examples, deterministic compaction rules, and benchmark tasks. See [CONTRIBUTING.md](CONTRIBUTING.md).
+The most valuable contributions are sanitized transcript fixtures, agent-specific parsers, provider usage examples, deterministic optimization rules, benchmark tasks, and cross-platform installation testing. See [CONTRIBUTING.md](CONTRIBUTING.md).
