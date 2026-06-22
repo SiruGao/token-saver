@@ -12,6 +12,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
+time = "=0.3.48"
 
 [features]
 default = ["custom-protocol"]
