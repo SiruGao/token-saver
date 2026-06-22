@@ -1,0 +1,18 @@
+[package]
+name = "token-saver-desktop"
+version = "1.0.0"
+description = "Local-first token efficiency desktop application for AI agents"
+authors = ["SiruGao"]
+edition = "2021"
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

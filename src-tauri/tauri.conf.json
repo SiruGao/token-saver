@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Token Saver",
+  "version": "1.0.0",
+  "identifier": "com.sirugao.tokensaver",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Token Saver",
+        "label": "main",
+        "width": 1320,
+        "height": 840,
+        "minWidth": 960,
+        "minHeight": 680,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "DeveloperTool",
+    "shortDescription": "Find and reduce AI-agent token waste.",
+    "longDescription": "A local-first desktop application that diagnoses token waste across AI agents and measures cost per successful task.",
+    "copyright": "Copyright © 2026 SiruGao"
+  }
+}

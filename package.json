@@ -1,0 +1,27 @@
+{
+  "name": "token-saver-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Local-first desktop app for diagnosing and reducing AI-agent token waste.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "typescript": "^5.8.3",
+    "vite": "^7.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
