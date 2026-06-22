@@ -100,6 +100,10 @@ export interface CompressionStrategy {
   homepage?: string;
   installCommand?: string;
   executable?: string;
+  runtimeDetected?: boolean;
+  runtimeVersion?: string;
+  runtimeCheckedAt?: string;
+  runtimeDetail?: string;
   capabilities: string[];
   compatibleAgents: AgentId[];
   recommendedFor: FindingType[];
