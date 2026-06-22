@@ -14,6 +14,7 @@ import { demoWorkspace, emptyWorkspace } from "./data/demo";
 import { syncFixProposals } from "./fixes/proposals";
 import { syncBaselineRecords } from "./proof/ledger";
 import { mergeStrategyRegistry } from "./strategies/registry";
+import { applyRuntimeDetections } from "./strategies/runtime";
 import { checkStrategyUpdates } from "./strategies/updates";
 import type { AgentSession, ViewId, WorkspaceState } from "./types";
 import { proofView } from "./ui/proof";
@@ -114,23 +115,11 @@ async function refreshStrategyRuntimes(): Promise<void> {
   if (!isTauriRuntime()) return toast("Runtime detection requires the desktop application.");
   try {
     const detected = await detectNativeStrategyRuntimes();
-    const checkedAt = new Date().toISOString();
-    const strategies = mergeStrategyRegistry(state.strategies).map((strategy) => {
-      const runtime = detected.find((item) => item.strategyId === strategy.id);
-      if (!runtime) return strategy;
-      return {
-        ...strategy,
-        runtimeDetected: runtime.detected,
-        runtimeHealthy: runtime.healthy,
-        runtimeVersion: runtime.version,
-        runtimeCheckedAt: checkedAt,
-        runtimeDetail: runtime.detail,
-        installedVersion: runtime.detected ? runtime.version ?? strategy.installedVersion : undefined,
-        state: runtime.healthy
-          ? strategy.state === "update-available" ? "update-available" : "installed"
-          : strategy.state === "installed" ? "available" : strategy.state,
-      };
-    });
+    const strategies = applyRuntimeDetections(
+      mergeStrategyRegistry(state.strategies),
+      detected,
+      new Date().toISOString(),
+    );
     commit({ ...state, strategies });
     const found = detected.filter((item) => item.detected).length;
     const healthy = detected.filter((item) => item.healthy).length;
