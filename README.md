@@ -6,7 +6,7 @@
 
 **Diagnose waste. Optimize safely. Prove that each successful task costs less.**
 
-[![License: CC0-1.0](https://img.shields.io/badge/License-CC0_1.0-lightgrey.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Project status](https://img.shields.io/badge/status-early%20access-orange.svg)](#project-status)
 [![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-skill-6f42c1.svg)](#quick-start)
 [![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
@@ -225,4 +225,4 @@ AI agent token optimization · LLM cost optimization · context engineering · c
 
 ## License
 
-CC0 1.0 Universal — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
