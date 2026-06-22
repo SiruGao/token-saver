@@ -6,7 +6,13 @@ Token Saver separates application releases from third-party strategy metadata.
 
 V1 Preview checks the public GitHub Releases API and reports whether a newer Token Saver version exists.
 
-It does not install an update automatically. This is intentional until all of the following are complete:
+When a newer public release is available, the application can open the exact Token Saver GitHub Release page in the operating system's default browser. The release URL is validated in both the frontend and the Rust process and must remain under:
+
+```text
+https://github.com/SiruGao/token-saver/releases/
+```
+
+V1 Preview does not download or execute installers automatically. This is intentional until all of the following are complete:
 
 - a dedicated Tauri signing key is generated;
 - the private key is stored only in GitHub Actions secrets;
@@ -15,7 +21,7 @@ It does not install an update automatically. This is intentional until all of th
 - update manifests and packages are signed;
 - upgrade and rollback tests pass on every supported platform.
 
-Until then, users install a newer build from the project's GitHub Release page.
+Until then, users review and install a newer build from the project's GitHub Release page.
 
 ## Strategy metadata
 
@@ -48,11 +54,12 @@ Then review the resulting diff in `registry/strategies.json` and submit it throu
 Token Saver distinguishes these states:
 
 1. **Observed** — an upstream release exists.
-2. **Compatible** — an adapter accepts the version and passes a health check.
-3. **Approved** — the user or organization permits the version.
-4. **Verified** — task outcome and rework metrics remain within policy.
+2. **Detected** — a local runtime responds to a fixed read-only version command.
+3. **Compatible** — an adapter accepts the version and passes a health check.
+4. **Approved** — the user or organization permits the version.
+5. **Verified** — task outcome and rework metrics remain within policy.
 
-Only the first state is implemented in V1 Preview.
+V1 Preview currently implements observed release metadata and read-only RTK runtime detection. Detection is not execution approval.
 
 ## Security rules
 
@@ -60,4 +67,6 @@ Only the first state is implemented in V1 Preview.
 - Registry metadata never contains executable code.
 - Automatic changes to `main` are not permitted.
 - Application installation is not enabled without signature verification.
-- Strategy execution is not enabled without preview, provenance, and rollback support.
+- External URLs are restricted to the Token Saver GitHub Release path.
+- Strategy runtime detection uses fixed commands without a shell or user arguments.
+- Strategy execution is not enabled without preview, provenance, backup, and rollback support.
