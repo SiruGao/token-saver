@@ -7,26 +7,62 @@ export interface NativeAppUpdate {
   publishedAt?: string;
 }
 
-const CURRENT_VERSION = "1.0.0";
+export interface NativeStrategyRuntime {
+  strategyId: string;
+  detected: boolean;
+  healthy: boolean;
+  version?: string;
+  detail: string;
+}
+
+const FALLBACK_VERSION = "1.0.0";
 const LATEST_RELEASE = "https://api.github.com/repos/SiruGao/token-saver/releases/latest";
 
 export function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window;
 }
 
-async function invoke<T>(command: string): Promise<T> {
+async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const api = await import("@tauri-apps/api/core");
-  return api.invoke<T>(command);
+  return api.invoke<T>(command, args);
 }
 
-function newer(candidate: string, current: string): boolean {
-  const left = candidate.replace(/^v/, "").split(".").map(Number);
-  const right = current.replace(/^v/, "").split(".").map(Number);
+function numericVersion(value: string): number[] {
+  const stablePart = value.replace(/^v/, "").split("-")[0] ?? "";
+  return stablePart
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0);
+}
+
+export function isNewerVersion(candidate: string, current: string): boolean {
+  const left = numericVersion(candidate);
+  const right = numericVersion(current);
   for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
     const difference = (left[index] || 0) - (right[index] || 0);
     if (difference !== 0) return difference > 0;
   }
   return false;
+}
+
+async function currentAppVersion(): Promise<string> {
+  if (!isTauriRuntime()) return FALLBACK_VERSION;
+  try {
+    const api = await import("@tauri-apps/api/app");
+    return await api.getVersion();
+  } catch {
+    return FALLBACK_VERSION;
+  }
+}
+
+export function isTrustedReleaseUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:"
+      && parsed.hostname === "github.com"
+      && parsed.pathname.startsWith("/SiruGao/token-saver/releases/");
+  } catch {
+    return false;
+  }
 }
 
 export async function detectNativeIntegrations(): Promise<NativeIntegration[]> {
@@ -39,7 +75,13 @@ export async function scanNativeSessions(): Promise<NativeSessionFile[]> {
   return invoke<NativeSessionFile[]>("scan_local_sessions");
 }
 
+export async function detectNativeStrategyRuntimes(): Promise<NativeStrategyRuntime[]> {
+  if (!isTauriRuntime()) return [];
+  return invoke<NativeStrategyRuntime[]>("detect_strategy_runtimes");
+}
+
 export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
+  const currentVersion = await currentAppVersion();
   const response = await fetch(LATEST_RELEASE, {
     cache: "no-store",
     headers: { Accept: "application/vnd.github+json" },
@@ -53,13 +95,25 @@ export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
     draft?: boolean;
   };
   const version = release.tag_name?.replace(/^v/, "");
-  if (!version || release.draft || !newer(version, CURRENT_VERSION)) return null;
+  if (!version || release.draft || !isNewerVersion(version, currentVersion)) return null;
+  if (!release.html_url || !isTrustedReleaseUrl(release.html_url)) {
+    throw new Error("GitHub returned an untrusted release URL");
+  }
   return {
     version,
-    currentVersion: CURRENT_VERSION,
+    currentVersion,
     releaseUrl: release.html_url,
     publishedAt: release.published_at,
   };
+}
+
+export async function openReleasePage(url: string): Promise<void> {
+  if (!isTrustedReleaseUrl(url)) throw new Error("Untrusted release URL");
+  if (isTauriRuntime()) {
+    await invoke<void>("open_release_url", { url });
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export function runtimeLabel(): string {
