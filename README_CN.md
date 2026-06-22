@@ -71,4 +71,4 @@ Token Saver 计划把以下能力放在一个闭环里：
 
 ## 许可
 
-CC0 1.0 Universal — 见 [LICENSE](LICENSE)。
+MIT — 见 [LICENSE](LICENSE)。
