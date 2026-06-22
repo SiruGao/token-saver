@@ -1,7 +1,7 @@
 import "./styles.css";
 import { analyzeSessions, parseTranscript } from "./core/analyzer";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
-import { detectNativeIntegrations, runtimeLabel, scanNativeSessions } from "./core/tauri";
+import { detectNativeIntegrations, runtimeLabel } from "./core/tauri";
 import { demoWorkspace, emptyWorkspace } from "./data/demo";
 import type { AgentSession, ViewId, WorkspaceState } from "./types";
 import {
@@ -100,16 +100,12 @@ function mergeSessions(existing: AgentSession[], incoming: AgentSession[]): Agen
   return [...byId.values()].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt));
 }
 
-async function scanLocal(): Promise<void> {
-  toast("Scanning local agent directories…", "info");
+async function detectLocalAgents(): Promise<void> {
+  toast("Detecting local agent installations…", "info");
   try {
-    const [nativeIntegrations, files] = await Promise.all([
-      detectNativeIntegrations(),
-      scanNativeSessions(),
-    ]);
-
-    if (!nativeIntegrations.length && !files.length) {
-      toast("Native scanning is available in the desktop build. Use Import in web preview.", "info");
+    const nativeIntegrations = await detectNativeIntegrations();
+    if (!nativeIntegrations.length) {
+      toast("Native detection is available in the desktop build. Use Import in web preview.", "info");
       return;
     }
 
@@ -119,26 +115,18 @@ async function scanLocal(): Promise<void> {
         ? { ...integration, detected: native.detected, connected: native.detected, path: native.path, detail: native.detail }
         : integration;
     });
-    const imported = files.map((file) => parseTranscript(file.content, file.path));
-    const sessions = mergeSessions(state.sessions, imported);
-    update({
-      ...state,
-      integrations,
-      sessions,
-      findings: analyzeSessions(sessions, state.settings.largeOutputThreshold),
-      lastScanAt: new Date().toISOString(),
-    });
-    toast(`Detected ${nativeIntegrations.filter((item) => item.detected).length} agents and imported ${imported.length} sessions.`, "success");
+    update({ ...state, integrations, lastScanAt: new Date().toISOString() });
+    toast(`Detected ${nativeIntegrations.filter((item) => item.detected).length} local agents. Import transcripts explicitly to analyze them.`, "success");
   } catch (error) {
-    toast(`Local scan failed: ${String(error)}`, "error");
+    toast(`Local detection failed: ${String(error)}`, "error");
   }
 }
 
 function bindActions(): void {
   document.querySelector("#import-button")?.addEventListener("click", () => fileInput.click());
-  document.querySelector("#scan-button")?.addEventListener("click", scanLocal);
-  document.querySelector("#empty-scan")?.addEventListener("click", scanLocal);
-  document.querySelector("#integration-scan")?.addEventListener("click", scanLocal);
+  document.querySelector("#scan-button")?.addEventListener("click", detectLocalAgents);
+  document.querySelector("#empty-scan")?.addEventListener("click", detectLocalAgents);
+  document.querySelector("#integration-scan")?.addEventListener("click", detectLocalAgents);
   document.querySelector("#demo-button")?.addEventListener("click", () => {
     update(demoWorkspace());
     toast("Demo workspace loaded.", "success");
@@ -197,5 +185,5 @@ window.addEventListener("drop", async (event) => {
 render();
 
 if (state.settings.autoScan && runtimeLabel() === "Desktop" && !state.lastScanAt) {
-  void scanLocal();
+  void detectLocalAgents();
 }
