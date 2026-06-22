@@ -29,6 +29,7 @@ struct SessionFile {
 struct StrategyRuntimeDetection {
     strategy_id: String,
     detected: bool,
+    healthy: bool,
     version: Option<String>,
     detail: String,
 }
@@ -121,12 +122,21 @@ fn detect_rtk_runtime() -> StrategyRuntimeDetection {
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
             let response = if stdout.is_empty() { stderr } else { stdout };
+            let identity_matches = response
+                .split_whitespace()
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case("rtk"));
+            let healthy = output.status.success() && identity_matches;
             StrategyRuntimeDetection {
                 strategy_id: "rtk".to_string(),
                 detected: true,
+                healthy,
                 version: output.status.success().then_some(response.clone()),
-                detail: if output.status.success() {
-                    "RTK responded to the read-only version check.".to_string()
+                detail: if healthy {
+                    "RTK responded with the expected identity to the read-only version check."
+                        .to_string()
+                } else if output.status.success() {
+                    format!("An executable named rtk responded with an unexpected identity: {response}")
                 } else {
                     format!("RTK was found but the version check failed: {response}")
                 },
@@ -135,12 +145,14 @@ fn detect_rtk_runtime() -> StrategyRuntimeDetection {
         Err(error) if error.kind() == ErrorKind::NotFound => StrategyRuntimeDetection {
             strategy_id: "rtk".to_string(),
             detected: false,
+            healthy: false,
             version: None,
             detail: "RTK was not found on the desktop PATH.".to_string(),
         },
         Err(error) => StrategyRuntimeDetection {
             strategy_id: "rtk".to_string(),
             detected: false,
+            healthy: false,
             version: None,
             detail: format!("RTK could not be checked: {error}"),
         },
