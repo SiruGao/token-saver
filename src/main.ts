@@ -1,5 +1,5 @@
 import "./styles.css";
-import { analyzeSessions, parseTranscript } from "./core/analyzer";
+import { analyzeSessions, parseTranscript } from "./core/analyzer-v1";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
 import { detectNativeIntegrations, runtimeLabel } from "./core/tauri";
 import { demoWorkspace, emptyWorkspace } from "./data/demo";
