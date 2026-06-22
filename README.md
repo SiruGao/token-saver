@@ -1,17 +1,18 @@
 <div align="center">
 
-# ⚡ Token Saver
+# ⚡ Token Saver Desktop
 
-### Quality-aware token efficiency for AI agents
+### Local-first token efficiency for AI agents
 
-**Diagnose waste. Optimize safely. Prove that each successful task costs less.**
+**Find where your AI tokens go. Diagnose waste safely. Measure cost per successful task.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Project status](https://img.shields.io/badge/status-early%20access-orange.svg)](#project-status)
-[![OpenClaw Skill](https://img.shields.io/badge/OpenClaw-skill-6f42c1.svg)](#quick-start)
-[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Desktop V1](https://img.shields.io/badge/Desktop-V1.0-7c5cff.svg)](docs/V1.md)
+[![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB.svg)](src-tauri)
+[![Local first](https://img.shields.io/badge/privacy-local--first-32d2a0.svg)](#privacy)
+[![CI](https://github.com/SiruGao/token-saver/actions/workflows/ci.yml/badge.svg)](https://github.com/SiruGao/token-saver/actions/workflows/ci.yml)
 
-[Quick start](#quick-start) · [Why Token Saver](#why-token-saver) · [Roadmap](ROADMAP.md) · [Architecture](docs/ARCHITECTURE.md) · [Benchmarks](docs/BENCHMARKS.md) · [Contributing](CONTRIBUTING.md)
+[Get started](#get-started) · [Desktop V1](#desktop-v1) · [Architecture](docs/ARCHITECTURE.md) · [Benchmarks](docs/BENCHMARKS.md) · [Roadmap](ROADMAP.md)
 
 [English](README.md) · [中文说明](README_CN.md)
 
@@ -19,209 +20,171 @@
 
 ---
 
-Token Saver is an open-source project for reducing avoidable LLM and AI-agent cost **without hiding quality regressions behind a compression percentage**.
+Token Saver is an open-source desktop application that analyzes AI-agent sessions, identifies avoidable token waste, and explains how to reduce it without hiding quality regressions behind a compression percentage.
 
-Most token tools focus on one layer: command-output compression, usage dashboards, model routing, or code retrieval. Token Saver is being built as a quality-aware efficiency control layer that connects four steps:
-
-```text
-Observe waste → Optimize safely → Verify task quality → Reconcile real cost
-```
-
-The current release is a lightweight OpenClaw skill. The next product milestone is **Token Saver Doctor**, a local-first CLI that identifies repeated context, cache-breaking prompt drift, oversized tool schemas, noisy logs, and other "ghost token" patterns.
-
-## Why Token Saver
-
-Token waste is not a single compression problem.
-
-| Waste source | Typical symptom | Safer response |
-|---|---|---|
-| Repeated context | The same files, instructions, or history are sent again | Deduplicate or send only the delta |
-| Prompt-cache misses | Stable instructions move or change between requests | Normalize and stabilize the prompt prefix |
-| Tool-schema bloat | Dozens of unused MCP tools enter every request | Lazy-load only relevant tools |
-| Noisy tool output | Logs, test output, JSON, and file trees dominate context | Apply structure-aware, reversible compaction |
-| Over-compression | The agent loses detail and repeats tools or rereads files | Detect rework and fail open to the original |
-| Wrong model or effort | Routine steps use an unnecessarily expensive model | Route by task risk, not prompt length alone |
-| Invisible billing drift | Local estimates do not match provider usage | Reconcile against provider-reported usage |
-
-### The differentiator: cost per successful task
-
-A smaller prompt is not automatically a cheaper task. If compression removes a required detail and the agent reruns a tool, rereads a file, or produces a wrong answer, the apparent saving disappears.
-
-Token Saver's target metric is therefore:
+The product is designed around one metric:
 
 ```text
 Cost per successful task
-= total provider cost, including retries and rework
+= all model cost, retries, rereads, and repair turns
   ÷ successfully completed tasks
 ```
 
-The long-term product is designed around three connected layers:
+The desktop application is now the product. The original OpenClaw `SKILL.md` remains available as one integration rather than the core product.
 
-1. **Doctor** — find where tokens are being wasted.
-2. **Gateway** — apply safe, reversible optimizations with fail-open behavior.
-3. **Proof Ledger** — compare original input, optimized input, provider usage, retries, latency, and task outcome.
+## Desktop V1
 
-## Project status
+Token Saver V1 is a working local analyzer with its own desktop UI.
 
-> [!IMPORTANT]
-> Token Saver is currently an **early-stage OpenClaw skill**, not yet a universal proxy or production cost-control platform.
+### Included
 
-### Available now
+- **Dashboard** — token usage, estimated cost, avoidable input, task signals, and agent breakdown.
+- **Doctor** — diagnoses repeated reads, repeated results, oversized output, long instructions, prompt-prefix drift, and possible rework.
+- **Sessions** — inspect task usage, event timelines, and associated findings.
+- **Integrations** — detects Claude Code, Codex, OpenClaw, Hermes, OpenCode, and Cursor installations.
+- **Local scan** — reads recent JSON, JSONL, and text sessions from detected agent directories.
+- **Transcript import** — drag and drop or select local transcript files.
+- **Usage normalization** — preserves common provider usage fields and estimates tokens only when needed.
+- **Local report export** — exports the current workspace as JSON.
+- **Demo workspace** — previews every main UI state without private data.
 
-- Task-complexity guidance for model selection
-- Context hygiene for long conversations
-- Concise-response rules
-- Tool-call and file-read discipline
-- OpenClaw-compatible `SKILL.md`
+### Doctor rules
 
-### In development
+| Rule | What it detects |
+|---|---|
+| Repeated file read | The same path loaded multiple times in one task |
+| Repeated tool result | Identical output injected more than once |
+| Large tool output | Logs or results dominating the context |
+| Long instruction | Large persistent system or instruction blocks |
+| Prompt-prefix drift | System prefixes varying across sessions |
+| Possible rework | A tool called unusually often |
 
-- `token-saver doctor` for local transcript and configuration analysis
-- A unified usage ledger backed by provider receipts
-- Prompt-prefix and cache-hit diagnostics
-- Repeated-context and repeated-file-read detection
-- Reversible log and tool-output compaction
-- Quality-aware replay and regression benchmarks
-- Adapters for Claude Code, Codex, OpenCode, OpenClaw, Hermes, and other agents
+V1 is deliberately read-only. It does not silently rewrite prompts, commands, or agent settings.
 
-See the full [roadmap](ROADMAP.md).
+## Get started
 
-## Quick start
+### Requirements
 
-### Install as an OpenClaw skill
+- Node.js 20 or later
+- npm
+- For native desktop development: the Rust and system prerequisites required by Tauri 2
+
+### Run the web preview
 
 ```bash
-openclaw skills install token-saver
+npm install
+npm run dev
 ```
 
-Or install manually:
+Then choose **Load demo workspace** or import a transcript.
+
+### Run the desktop application
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/token-saver
-cp SKILL.md ~/.openclaw/workspace/skills/token-saver/SKILL.md
+npm install
+npm run desktop:dev
 ```
 
-The skill acts as an advisory policy for every turn. It encourages the agent to choose an appropriate model, avoid repeated reads, compress resolved context, batch tool calls, and keep output proportional to the task.
+### Build native installers
 
-> Actual savings depend on the model, provider, agent, task mix, cache behavior, and whether the host supports model switching. Token Saver does not present estimated percentages as measured results.
+```bash
+npm install
+npm run desktop:build
+```
 
-## What makes this different
-
-| Product category | Usually measures | Usually misses | Token Saver direction |
-|---|---|---|---|
-| Output compressor | Tokens before vs. after compression | Retries, lost detail, task failure | Compression plus rework detection and replay |
-| Token dashboard | Historical usage and estimated cost | Automatic remediation | Diagnosis linked to executable fixes |
-| Model router | Price per request | Task quality and downstream rework | Risk-aware routing with outcome tracking |
-| Code index / MCP | Fewer full-file reads | Logs, chat history, billing, non-code workflows | Cross-layer waste analysis |
-| Prompt skill | Better agent behavior | Real request interception and provider receipts | Skill today; measurable runtime layer next |
-
-## Planned architecture
+Bundles are written to:
 
 ```text
-Claude Code / Codex / OpenCode / OpenClaw / Hermes / custom agents
+src-tauri/target/release/bundle/
+```
+
+A GitHub Actions workflow is included for macOS, Windows, and Linux bundle builds. Read [docs/V1.md](docs/V1.md) for the acceptance scope and current limitations.
+
+## How it works
+
+```text
+Claude Code / Codex / OpenClaw / Hermes / OpenCode / Cursor
+                              │
+                    local files or import
                               │
                          Agent adapters
                               │
-                 ┌────────────┴────────────┐
-                 │      Token Saver        │
-                 │                         │
-                 │  Meter    Optimizer     │
-                 │  Doctor   Quality Guard │
-                 │  Cache    Replay        │
-                 └────────────┬────────────┘
+              ┌───────────────┴────────────────┐
+              │       Token Saver Desktop      │
+              │                                │
+              │  Normalizer   Usage Meter      │
+              │  Doctor       Local Ledger     │
+              │  Session UI   Report Export    │
+              └───────────────┬────────────────┘
                               │
-                    Local Proof Ledger
-                              │
-                         LLM provider
+                    local application data
 ```
 
-Design principles:
-
-- **Local-first** — session analysis and optimization metadata stay on the user's machine by default.
-- **Fail-open** — unknown formats or optimization errors forward the original request.
-- **Reversible where possible** — compressed content keeps a path back to the original.
-- **Provider receipts win** — provider-reported usage is the accounting source of truth.
-- **Quality before compression ratio** — no optimization is successful if task quality falls.
-- **Adapter-based** — agent-specific integrations remain separate from the core event model.
-
-Read the [architecture document](docs/ARCHITECTURE.md).
-
-## Benchmark policy
-
-Token Saver will publish claims only when they are reproducible. Every benchmark must report:
-
-- fixed model and task set;
-- baseline and optimized runs;
-- original tokens, optimized tokens, and provider-reported usage;
-- task success rate;
-- retries and repeated tool calls;
-- wall-clock time;
-- cost per successful task.
-
-Initial benchmark tracks are defined in [docs/BENCHMARKS.md](docs/BENCHMARKS.md):
-
-- codebase exploration;
-- bug fixing with executable tests;
-- long-running document conversations;
-- CI and build-log diagnosis;
-- support-ticket history analysis.
-
-## Roadmap snapshot
-
-| Phase | Deliverable | Status |
-|---|---|---|
-| 0 | OpenClaw token-efficiency skill | Available |
-| 1 | Local `token-saver doctor` and waste taxonomy | Next |
-| 2 | Usage ledger and provider reconciliation | Planned |
-| 3 | Safe gateway: deduplication, cache alignment, reversible compaction | Planned |
-| 4 | Quality replay, regression detection, and cost-per-success dashboards | Planned |
-| 5 | Self-hosted CI, batch, audit, and enterprise controls | Exploring |
-
-## Target integrations
-
-| Integration | Current | Planned role |
-|---|:---:|---|
-| OpenClaw | ✅ | Skill and runtime adapter |
-| Claude Code | ◻️ | Transcript analysis, hooks, gateway adapter |
-| OpenAI Codex | ◻️ | Session analysis and Responses API adapter |
-| OpenCode | ◻️ | Usage ingestion and runtime adapter |
-| Hermes Agent | ◻️ | Plugin and session analysis |
-| Cursor / Cline / Roo Code | ◻️ | Proxy and telemetry adapters |
-| MCP clients | ◻️ | Tool-schema diagnosis and lazy loading |
+The application normalizes heterogeneous transcript records, preserves provider usage fields when available, estimates missing usage, runs deterministic Doctor rules, and links every finding back to its session.
 
 ## Repository structure
 
 ```text
 .
-├── SKILL.md                  # Current OpenClaw skill
-├── README.md                 # Canonical English documentation
-├── README_CN.md              # Short Chinese overview
-├── ROADMAP.md                # Product milestones
-├── CONTRIBUTING.md           # Contribution guide
-├── llms.txt                  # AI-readable project index
-├── docs/
-│   ├── ARCHITECTURE.md       # Planned system design
-│   └── BENCHMARKS.md         # Reproducible evaluation policy
-└── references/
-    └── token-pricing.md      # Background cost notes
+├── src/                       # TypeScript UI and analysis engine
+│   ├── core/                  # Parser, Doctor, storage, Tauri bridge
+│   ├── data/                  # Safe demo workspace
+│   └── ui/                    # Desktop views
+├── src-tauri/                 # Tauri 2 native shell and scanner
+├── docs/V1.md                 # V1 scope and acceptance criteria
+├── SKILL.md                   # Optional OpenClaw integration
+├── ROADMAP.md
+└── CONTRIBUTING.md
 ```
 
-## Contributing
+## Privacy
 
-The most useful contributions now are:
+Token Saver V1 is local-first:
 
-- anonymized token-waste patterns from real agent sessions;
-- parsers for Claude Code, Codex, OpenCode, OpenClaw, or Hermes logs;
-- reproducible benchmark tasks;
-- safe, deterministic compaction recipes;
-- provider usage and cache-accounting tests;
-- documentation and installation feedback.
+- no account is required;
+- no telemetry is implemented;
+- session analysis runs on the device;
+- transcript files are not uploaded;
+- native scanning is read-only;
+- file size, traversal depth, and file count are capped;
+- local data can be exported or deleted from Settings.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Imported transcripts may contain private information. Review files before sharing exports or benchmark fixtures.
+
+## Current limitations
+
+V1 is an observation and diagnosis release. It does not yet claim verified cost savings and does not yet include:
+
+- transparent provider proxying;
+- automatic context compression;
+- provider billing authentication;
+- quality-aware A/B replay;
+- SQLite-backed long-term storage;
+- signed public installers;
+- perfect parsing for every agent version.
+
+## Product direction
+
+```text
+V1 — Desktop analyzer and Doctor
+V1.1 — Agent-specific parsers and SQLite ledger
+V1.2 — Exact deduplication, cache alignment, and reversible log compaction
+V2 — Local Gateway, quality replay, and verified cost-per-success reporting
+```
+
+## OpenClaw integration
+
+The original behavior policy remains available:
+
+```bash
+openclaw skills install token-saver
+```
+
+It is now treated as an optional integration alongside the desktop application.
 
 ## Search keywords
 
-AI agent token optimization · LLM cost optimization · context engineering · context compression · prompt caching · token usage · AI FinOps · MCP optimization · Claude Code · OpenAI Codex · OpenClaw · Hermes Agent · Cursor · RAG optimization · local-first AI · reversible compression · agent observability
+AI agent token optimization · LLM cost optimization · AI agent desktop app · context engineering · prompt caching · token usage dashboard · AI FinOps · MCP optimization · Claude Code · OpenAI Codex · OpenClaw · Hermes Agent · Cursor · OpenCode · local-first AI · agent observability
 
 ## License
 
