@@ -1,6 +1,11 @@
 import "./styles.css";
 import "./strategy.css";
 import { analyzeSessions, parseTranscript } from "./core/import-router";
+import {
+  buildCodexSelectionPreview,
+  selectCodexImportIndexes,
+  type CodexSelectionPreview,
+} from "./core/codex-selection";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
 import {
   checkNativeAppUpdate,
@@ -30,9 +35,13 @@ import { dashboardView, doctorView, integrationsView, sessionsView, settingsView
 
 const appNode = document.querySelector<HTMLDivElement>("#app");
 const transcriptNode = document.querySelector<HTMLInputElement>("#transcript-file");
-if (!appNode || !transcriptNode) throw new Error("Token Saver failed to initialize.");
+const codexDirectoryNode = document.querySelector<HTMLInputElement>("#codex-directory");
+if (!appNode || !transcriptNode || !codexDirectoryNode) {
+  throw new Error("Token Saver failed to initialize.");
+}
 const app = appNode;
 const transcriptInput = transcriptNode;
+const codexDirectoryInput = codexDirectoryNode;
 
 function initialProofStorage(): ProofStorageStatus {
   if (isTauriRuntime()) {
@@ -62,6 +71,9 @@ let state = hydrate({ ...loadedWorkspace, proofStorage: initialProofStorage() })
 let activeView: ViewId = "dashboard";
 let selectedSessionId: string | undefined;
 let proofResetInProgress = false;
+let codexPreview: CodexSelectionPreview | undefined;
+let codexSelectedFiles: File[] = [];
+let codexImportBusy = false;
 const proofJournal = new ProofWriteJournal();
 
 function workspaceForBrowserStorage(value: WorkspaceState): WorkspaceState {
@@ -168,7 +180,7 @@ function currentView(): string {
   if (activeView === "strategies") return strategiesView(state);
   if (activeView === "proof") return proofView(state);
   if (activeView === "sessions") return sessionsView(state, selectedSessionId);
-  if (activeView === "integrations") return integrationsView(state);
+  if (activeView === "integrations") return integrationsView(state, codexPreview, codexImportBusy);
   if (activeView === "settings") return settingsView(state);
   return dashboardView(state);
 }
@@ -183,26 +195,81 @@ function toast(message: string, tone: "success" | "error" | "info" = "info"): vo
   window.setTimeout(() => item.remove(), 3500);
 }
 
-async function importFiles(files: FileList | File[]): Promise<void> {
+function commitImportedSessions(imported: AgentSession[]): void {
+  const indexed = new Map(state.sessions.map((session) => [session.id, session]));
+  for (const session of imported) indexed.set(session.id, session);
+  const sessions = [...indexed.values()].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
+  const findings = analyzeSessions(sessions, state.settings.largeOutputThreshold);
+  const proofRecords = syncBaselineRecords(sessions, findings, state.proofRecords);
+  const fixProposals = syncFixProposals(findings, mergeStrategyRegistry(state.strategies), state.fixProposals);
+  commit({ ...state, sessions, findings, proofRecords, fixProposals });
+}
+
+async function importFiles(files: FileList | File[]): Promise<number> {
   if (proofResetInProgress) {
     toast("Wait for local data clearing to finish.");
-    return;
+    return 0;
   }
   const imported: AgentSession[] = [];
   for (const file of Array.from(files)) {
     try { imported.push(parseTranscript(await file.text(), file.name)); }
     catch (error) { toast(`Could not import ${file.name}: ${String(error)}`, "error"); }
   }
-  const indexed = new Map(state.sessions.map((session) => [session.id, session]));
-  for (const session of imported) indexed.set(session.id, session);
-  const sessions = [...indexed.values()].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
   if (imported.length) {
-    const findings = analyzeSessions(sessions, state.settings.largeOutputThreshold);
-    const proofRecords = syncBaselineRecords(sessions, findings, state.proofRecords);
-    const fixProposals = syncFixProposals(findings, mergeStrategyRegistry(state.strategies), state.fixProposals);
-    commit({ ...state, sessions, findings, proofRecords, fixProposals });
+    commitImportedSessions(imported);
     toast(`Imported ${imported.length} session${imported.length === 1 ? "" : "s"} and recorded baselines.`, "success");
   }
+  return imported.length;
+}
+
+function previewCodexFolder(files: FileList): void {
+  codexSelectedFiles = Array.from(files);
+  codexPreview = buildCodexSelectionPreview(codexSelectedFiles.map((file) => ({
+    name: file.name,
+    size: file.size,
+    lastModified: file.lastModified,
+    relativePath: file.webkitRelativePath,
+  })));
+  activeView = "integrations";
+  if (!codexPreview.itemCount) {
+    codexPreview = undefined;
+    codexSelectedFiles = [];
+    toast("The selected folder contains no Codex rollout JSONL files.", "error");
+  } else {
+    toast(`Found ${codexPreview.itemCount} Codex rollout files. Review metadata before importing.`, "success");
+  }
+  render();
+}
+
+async function importLatestCodexFiles(): Promise<void> {
+  if (!codexPreview || codexImportBusy) return;
+  const indexes = selectCodexImportIndexes(codexPreview);
+  const selected = indexes
+    .map((index) => codexSelectedFiles[index])
+    .filter((file): file is File => Boolean(file));
+  if (!selected.length) {
+    toast("No Codex sessions satisfy the import limits.", "error");
+    return;
+  }
+
+  codexImportBusy = true;
+  render();
+  const imported = await importFiles(selected);
+  codexImportBusy = false;
+  if (imported) {
+    codexPreview = undefined;
+    codexSelectedFiles = [];
+    codexDirectoryInput.value = "";
+    activeView = "sessions";
+  }
+  render();
+}
+
+function clearCodexSelection(): void {
+  codexPreview = undefined;
+  codexSelectedFiles = [];
+  codexDirectoryInput.value = "";
+  render();
 }
 
 async function detectTools(): Promise<void> {
@@ -279,7 +346,6 @@ async function clearAllData(): Promise<void> {
   if (proofResetInProgress) return;
   proofResetInProgress = true;
   proofJournal.invalidate();
-
   try {
     await proofJournal.drain();
     if (state.proofStorage?.mode === "sqlite") await clearProofRecords();
@@ -290,9 +356,9 @@ async function clearAllData(): Promise<void> {
     toast(`Could not clear the SQLite Proof Ledger: ${String(error)}`, "error");
     return;
   }
-
   clearWorkspace();
   proofJournal.resetPersisted();
+  clearCodexSelection();
   const storage = state.proofStorage ?? initialProofStorage();
   state = hydrate({ ...emptyWorkspace(), proofStorage: storage });
   saveWorkspace(workspaceForBrowserStorage(state));
@@ -317,6 +383,9 @@ function bind(): void {
   const openImport = () => transcriptInput.click();
   ["#import-button", "#empty-import", "#dashboard-import", "#doctor-import", "#proof-import"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", openImport));
   ["#scan-button", "#empty-scan", "#integration-scan"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", () => void detectTools()));
+  document.querySelector("#codex-choose-folder")?.addEventListener("click", () => codexDirectoryInput.click());
+  document.querySelector("#codex-import-latest")?.addEventListener("click", () => void importLatestCodexFiles());
+  document.querySelector("#codex-clear-selection")?.addEventListener("click", clearCodexSelection);
   document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
   document.querySelector("#strategy-runtime-check")?.addEventListener("click", () => void refreshStrategyRuntimes());
   document.querySelector("#app-update-check")?.addEventListener("click", () => void refreshApp());
@@ -341,6 +410,9 @@ function render(): void { app.innerHTML = shell(activeView, currentView(), runti
 transcriptInput.onchange = async () => {
   if (transcriptInput.files) await importFiles(transcriptInput.files);
   transcriptInput.value = "";
+};
+codexDirectoryInput.onchange = () => {
+  if (codexDirectoryInput.files?.length) previewCodexFolder(codexDirectoryInput.files);
 };
 window.ondragover = (event) => event.preventDefault();
 window.ondrop = async (event) => {
