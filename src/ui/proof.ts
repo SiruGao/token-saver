@@ -1,6 +1,7 @@
 import type { ProofRecord, WorkspaceState } from "../types";
 import { compactNumber, currency, dateTime, escapeHtml } from "./format";
 import "./proof.css";
+import "./proof-storage.css";
 
 function recordCard(record: ProofRecord, state: WorkspaceState): string {
   const session = state.sessions.find((item) => item.id === record.sessionId);
