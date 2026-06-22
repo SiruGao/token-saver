@@ -1,7 +1,7 @@
 // @ts-nocheck
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isTrustedReleaseUrl } from "./tauri";
+import { isNewerVersion, isTrustedReleaseUrl } from "./tauri";
 
 test("accepts Token Saver GitHub release pages", () => {
   assert.equal(
@@ -24,4 +24,11 @@ test("rejects lookalike hosts and unrelated repositories", () => {
     false,
   );
   assert.equal(isTrustedReleaseUrl("javascript:alert(1)"), false);
+});
+
+test("compares packaged and release versions numerically", () => {
+  assert.equal(isNewerVersion("1.1.0", "1.0.9"), true);
+  assert.equal(isNewerVersion("v2.0.0", "1.9.9"), true);
+  assert.equal(isNewerVersion("1.0.0", "1.0.0"), false);
+  assert.equal(isNewerVersion("1.0.0-beta.2", "1.0.0"), false);
 });
