@@ -1,12 +1,22 @@
 import type { NativeStrategyRuntime } from "../core/tauri";
-import type { CompressionStrategy } from "../types";
+import type { CompressionStrategy, StrategyState } from "../types";
+
+function runtimeState(
+  strategy: CompressionStrategy,
+  healthy: boolean,
+): StrategyState {
+  if (healthy) {
+    return strategy.state === "update-available" ? "update-available" : "installed";
+  }
+  return strategy.state === "installed" ? "available" : strategy.state;
+}
 
 export function applyRuntimeDetections(
   strategies: CompressionStrategy[],
   detections: NativeStrategyRuntime[],
   checkedAt: string,
 ): CompressionStrategy[] {
-  return strategies.map((strategy) => {
+  return strategies.map((strategy): CompressionStrategy => {
     const runtime = detections.find((item) => item.strategyId === strategy.id);
     if (!runtime) return strategy;
     return {
@@ -19,9 +29,7 @@ export function applyRuntimeDetections(
       installedVersion: runtime.detected
         ? runtime.version ?? strategy.installedVersion
         : undefined,
-      state: runtime.healthy
-        ? strategy.state === "update-available" ? "update-available" : "installed"
-        : strategy.state === "installed" ? "available" : strategy.state,
+      state: runtimeState(strategy, runtime.healthy),
     };
   });
 }
