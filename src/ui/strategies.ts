@@ -17,6 +17,7 @@ function statusLabel(strategy: CompressionStrategy): string {
 function runtimeLabel(strategy: CompressionStrategy): string {
   if (!strategy.runtimeCheckedAt) return "Not checked";
   if (!strategy.runtimeDetected) return "Not found";
+  if (!strategy.runtimeHealthy) return "Unhealthy";
   return strategy.runtimeVersion ?? "Detected";
 }
 
@@ -26,9 +27,18 @@ function strategyCard(strategy: CompressionStrategy, recommendationCount: number
     : "Version not checked";
   const runtimeTone = !strategy.runtimeCheckedAt
     ? "unknown"
-    : strategy.runtimeDetected
-      ? "healthy"
-      : "missing";
+    : !strategy.runtimeDetected
+      ? "missing"
+      : strategy.runtimeHealthy
+        ? "healthy"
+        : "unhealthy";
+  const runtimeTitle = !strategy.runtimeCheckedAt
+    ? "Runtime not checked"
+    : !strategy.runtimeDetected
+      ? "Local runtime missing"
+      : strategy.runtimeHealthy
+        ? "Healthy local runtime"
+        : "Runtime requires review";
 
   return `
     <article class="strategy-card ${strategy.enabled ? "enabled" : ""}">
@@ -50,7 +60,7 @@ function strategyCard(strategy: CompressionStrategy, recommendationCount: number
       <div class="strategy-runtime ${runtimeTone}">
         <span></span>
         <div>
-          <strong>${strategy.runtimeDetected ? "Local runtime detected" : strategy.runtimeCheckedAt ? "Local runtime missing" : "Runtime not checked"}</strong>
+          <strong>${runtimeTitle}</strong>
           <small>${escapeHtml(strategy.runtimeDetail ?? "Run the read-only runtime check to inspect locally installed engines.")}</small>
         </div>
       </div>
@@ -71,7 +81,7 @@ export function strategiesView(state: WorkspaceState): string {
   const recommendations = recommendationsForFindings(state.findings, availableStrategies);
   const selected = availableStrategies.filter((strategy) => strategy.enabled).length;
   const updates = availableStrategies.filter((strategy) => strategy.state === "update-available").length;
-  const runtimes = availableStrategies.filter((strategy) => strategy.runtimeDetected).length;
+  const healthyRuntimes = availableStrategies.filter((strategy) => strategy.runtimeHealthy).length;
 
   return `
     <div class="strategy-hero">
@@ -82,7 +92,7 @@ export function strategiesView(state: WorkspaceState): string {
       </div>
       <div class="strategy-hero-metrics">
         <span><strong>${availableStrategies.length}</strong> registered</span>
-        <span><strong>${runtimes}</strong> detected</span>
+        <span><strong>${healthyRuntimes}</strong> healthy</span>
         <span><strong>${selected}</strong> selected</span>
         <span><strong>${updates}</strong> updates</span>
       </div>
@@ -97,7 +107,7 @@ export function strategiesView(state: WorkspaceState): string {
       <b>→</b>
       <div><span>2</span><strong>Policy</strong><small>Match compatible strategies</small></div>
       <b>→</b>
-      <div><span>3</span><strong>Adapter</strong><small>Preview a detected engine</small></div>
+      <div><span>3</span><strong>Adapter</strong><small>Preview a healthy engine</small></div>
       <b>→</b>
       <div><span>4</span><strong>Proof</strong><small>Compare cost, quality, and rework</small></div>
     </div>
