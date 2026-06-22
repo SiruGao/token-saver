@@ -1,6 +1,7 @@
 import { recommendationsForFindings, strategyRegistry } from "../strategies/registry";
 import type { CompressionStrategy, WorkspaceState } from "../types";
 import { dateTime, escapeHtml } from "./format";
+import "./runtime.css";
 
 function strategies(state: WorkspaceState): CompressionStrategy[] {
   return state.strategies?.length ? state.strategies : strategyRegistry;
