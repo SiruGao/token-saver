@@ -1,0 +1,45 @@
+name: Sync strategy registry
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: strategy-registry-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Query upstream releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/sync-strategy-registry.mjs
+
+      - name: Commit registry changes
+        shell: bash
+        run: |
+          if git diff --quiet -- registry/strategies.json; then
+            echo "No upstream release changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add registry/strategies.json
+          git commit -m "chore(registry): sync upstream strategy releases"
+          git push origin HEAD:main
