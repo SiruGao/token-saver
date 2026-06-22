@@ -134,4 +134,4 @@ The current repository is documentation- and skill-first. Toolchain and local de
 
 ## License
 
-By contributing, you agree that your contribution will be licensed under the repository's MIT License.
+By contributing, you agree that your contribution will be dedicated under the repository's CC0 1.0 Universal terms.
