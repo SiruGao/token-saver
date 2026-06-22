@@ -77,6 +77,7 @@ export interface Integration {
 export type StrategyMode = "external-cli" | "local-proxy" | "library" | "workspace-tool";
 export type StrategyRisk = "low" | "medium" | "high";
 export type StrategyState = "available" | "installed" | "update-available" | "disabled";
+export type StrategyCompatibilityStatus = "metadata-only" | "preview" | "verified" | "blocked";
 
 export interface CompressionStrategy {
   id: string;
@@ -89,7 +90,13 @@ export interface CompressionStrategy {
   state: StrategyState;
   installedVersion?: string;
   latestVersion?: string;
+  releaseUrl?: string;
+  releasePublishedAt?: string;
   lastCheckedAt?: string;
+  registryGeneratedAt?: string;
+  compatibilityStatus?: StrategyCompatibilityStatus;
+  verifiedVersions?: string[];
+  blockedVersions?: string[];
   homepage?: string;
   installCommand?: string;
   executable?: string;
@@ -107,12 +114,24 @@ export interface StrategyRecommendation {
   confidence: "low" | "medium" | "high";
 }
 
+export interface AppUpdateStatus {
+  currentVersion: string;
+  latestVersion?: string;
+  available: boolean;
+  releaseUrl?: string;
+  publishedAt?: string;
+  notes?: string;
+  checkedAt: string;
+  source: "github-release" | "signed-updater" | "unavailable";
+}
+
 export interface AppSettings {
   theme: "dark" | "light" | "system";
   localOnly: boolean;
   telemetry: boolean;
   autoScan: boolean;
   autoCheckStrategyUpdates?: boolean;
+  autoCheckAppUpdates?: boolean;
   largeOutputThreshold: number;
   repeatedReadWindowMinutes: number;
 }
@@ -126,6 +145,7 @@ export interface WorkspaceState {
   settings: AppSettings;
   lastScanAt?: string;
   lastStrategyCheckAt?: string;
+  appUpdate?: AppUpdateStatus;
 }
 
 export interface NativeIntegration {
