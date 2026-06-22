@@ -1,9 +1,13 @@
 import "./styles.css";
+import "./strategy.css";
 import { analyzeSessions, parseTranscript } from "./core/analyzer-v1";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
 import { detectNativeIntegrations, runtimeLabel } from "./core/tauri";
 import { demoWorkspace, emptyWorkspace } from "./data/demo";
+import { mergeStrategyRegistry } from "./strategies/registry";
+import { checkStrategyUpdates } from "./strategies/updates";
 import type { AgentSession, ViewId, WorkspaceState } from "./types";
+import { strategiesView } from "./ui/strategies";
 import {
   dashboardView,
   doctorView,
@@ -19,12 +23,23 @@ if (!rootElement || !fileInputElement) throw new Error("Token Saver failed to in
 const root = rootElement;
 const fileInput = fileInputElement;
 
-let state: WorkspaceState = loadWorkspace(emptyWorkspace());
+function hydrateWorkspace(workspace: WorkspaceState): WorkspaceState {
+  return {
+    ...workspace,
+    strategies: mergeStrategyRegistry(workspace.strategies),
+    settings: {
+      ...workspace.settings,
+      autoCheckStrategyUpdates: workspace.settings.autoCheckStrategyUpdates ?? true,
+    },
+  };
+}
+
+let state: WorkspaceState = hydrateWorkspace(loadWorkspace(emptyWorkspace()));
 let activeView: ViewId = "dashboard";
 let selectedSessionId: string | undefined;
 
 function update(next: WorkspaceState): void {
-  state = next;
+  state = hydrateWorkspace(next);
   saveWorkspace(state);
   render();
 }
@@ -33,6 +48,8 @@ function page(): string {
   switch (activeView) {
     case "doctor":
       return doctorView(state);
+    case "strategies":
+      return strategiesView(state);
     case "sessions":
       return sessionsView(state, selectedSessionId);
     case "integrations":
@@ -52,6 +69,21 @@ function toast(message: string, tone: "success" | "error" | "info" = "info"): vo
   element.textContent = message;
   target.append(element);
   window.setTimeout(() => element.remove(), 3600);
+}
+
+function installStrategyNavigation(): void {
+  const nav = document.querySelector("nav");
+  if (!nav || nav.querySelector('[data-nav="strategies"]')) return;
+  const button = document.createElement("button");
+  button.className = `nav-item ${activeView === "strategies" ? "active" : ""}`;
+  button.dataset.nav = "strategies";
+  button.innerHTML = '<span class="nav-icon">⌁</span><span>Strategies</span>';
+  const sessionsButton = nav.querySelector('[data-nav="sessions"]');
+  nav.insertBefore(button, sessionsButton);
+  if (activeView === "strategies") {
+    const title = document.querySelector(".topbar h1");
+    if (title) title.textContent = "Strategies";
+  }
 }
 
 function bindNavigation(): void {
@@ -122,11 +154,35 @@ async function detectLocalAgents(): Promise<void> {
   }
 }
 
+async function refreshStrategies(showToast = true): Promise<void> {
+  if (showToast) toast("Checking upstream strategy releases…", "info");
+  const strategies = await checkStrategyUpdates(mergeStrategyRegistry(state.strategies));
+  update({ ...state, strategies, lastStrategyCheckAt: new Date().toISOString() });
+  if (showToast) {
+    const updates = strategies.filter((strategy) => strategy.state === "update-available").length;
+    toast(updates ? `${updates} strategy update${updates === 1 ? "" : "s"} available.` : "Strategy registry is up to date.", "success");
+  }
+}
+
+function toggleStrategy(strategyId: string): void {
+  const strategies = mergeStrategyRegistry(state.strategies).map((strategy) =>
+    strategy.id === strategyId ? { ...strategy, enabled: !strategy.enabled } : strategy,
+  );
+  update({ ...state, strategies });
+}
+
 function bindActions(): void {
   document.querySelector("#import-button")?.addEventListener("click", () => fileInput.click());
   document.querySelector("#scan-button")?.addEventListener("click", detectLocalAgents);
   document.querySelector("#empty-scan")?.addEventListener("click", detectLocalAgents);
   document.querySelector("#integration-scan")?.addEventListener("click", detectLocalAgents);
+  document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
+  document.querySelectorAll<HTMLElement>("[data-strategy-toggle]").forEach((element) => {
+    element.addEventListener("click", () => {
+      const strategyId = element.dataset.strategyToggle;
+      if (strategyId) toggleStrategy(strategyId);
+    });
+  });
   document.querySelector("#demo-button")?.addEventListener("click", () => {
     update(demoWorkspace());
     toast("Demo workspace loaded.", "success");
@@ -143,7 +199,7 @@ function bindActions(): void {
     const confirmed = window.confirm("Remove all imported Token Saver data from this device?");
     if (!confirmed) return;
     clearWorkspace();
-    state = emptyWorkspace();
+    state = hydrateWorkspace(emptyWorkspace());
     activeView = "dashboard";
     selectedSessionId = undefined;
     saveWorkspace(state);
@@ -167,6 +223,7 @@ function bindActions(): void {
 
 function render(): void {
   root.innerHTML = shell(activeView, page(), runtimeLabel());
+  installStrategyNavigation();
   bindNavigation();
   bindActions();
 }
@@ -186,4 +243,9 @@ render();
 
 if (state.settings.autoScan && runtimeLabel() === "Desktop" && !state.lastScanAt) {
   void detectLocalAgents();
+}
+
+const lastCheckAge = state.lastStrategyCheckAt ? Date.now() - Date.parse(state.lastStrategyCheckAt) : Number.POSITIVE_INFINITY;
+if (state.settings.autoCheckStrategyUpdates !== false && lastCheckAge > 24 * 60 * 60 * 1000) {
+  void refreshStrategies(false);
 }
