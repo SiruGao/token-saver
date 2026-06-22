@@ -1,117 +1,169 @@
 ---
 name: token-saver
-description: Optimize token consumption through intelligent model routing, context compression, and smart optimization. Always active — automatically classifies question complexity, routes to cost-optimal models, compresses long conversations, and eliminates wasteful patterns. Use on every message to reduce API costs by 50-80%.
+description: Reduce avoidable token and API cost through task-aware model selection, context hygiene, concise responses, and disciplined tool use. Apply as an advisory policy on every turn. Actual savings vary by agent, model, provider, cache behavior, and workload; measure results instead of assuming a fixed percentage.
 ---
 
 # Token Saver
 
-## Intelligent Model Routing (Core Feature)
+Token Saver is an advisory efficiency policy for AI agents. Its goal is to reduce unnecessary input, output, and tool-call overhead while preserving task quality.
 
-Automatically classify each message's complexity and route to the most cost-effective model.
+The primary objective is not the smallest prompt. It is the lowest **cost per successful task**, including retries, rereads, and repair work.
 
-### Complexity Classification
+## 1. Classify task risk before choosing a model
 
-On every incoming message, evaluate complexity before responding:
+Use the least expensive model that can reliably complete the task.
 
-**Level 1 — Simple** (use cheapest model)
-- Greetings, casual chat, yes/no questions
-- Simple factual lookups, translations
-- Short confirmations, acknowledgments
-- Examples: "你好", "今天天气怎么样", "帮我翻译这句话", "好的"
+### Low-risk routine work
 
-**Level 2 — Medium** (use balanced model)
-- Multi-step but routine tasks
-- File operations, simple code edits
-- Summarization, basic analysis
-- Examples: "帮我查一下这只股票", "写个简单的函数", "总结一下这篇文章"
+Examples:
 
-**Level 3 — Complex** (use strongest model)
-- Architecture design, complex debugging
-- Multi-file refactoring, creative writing
-- Strategic planning, nuanced analysis
-- Examples: "帮我设计一个系统架构", "这个bug怎么排查", "写一个完整的skill"
+- greetings and acknowledgments;
+- simple translations;
+- direct factual lookups;
+- formatting or mechanical transformations;
+- routine tool-result interpretation.
 
-### Routing Action
+Prefer a small or low-cost model when the host supports model switching.
 
-After classifying, use `session_status` tool to switch model:
+### Medium-risk structured work
 
-- **Level 1** → switch to cheapest available (e.g., `opencode/claude-haiku-3.5`, `gpt-4o-mini`)
-- **Level 2** → switch to balanced (e.g., `opencode/claude-sonnet-4`, `gpt-4o`)
-- **Level 3** → keep current or switch to strongest (e.g., `opencode/claude-opus-4-6`)
+Examples:
 
-After completing a complex task, **switch back to cheap model** for the next turn.
+- multi-step but familiar workflows;
+- standard file operations;
+- simple code edits with clear tests;
+- summarization and comparison;
+- ordinary debugging with localized scope.
 
-### Cost Comparison
+Prefer a balanced model.
 
-| Model | Input/1M | Output/1M | Relative Cost |
-|---|---|---|---|
-| Claude Haiku 3.5 | $0.80 | $4.00 | 1x (baseline) |
-| Claude Sonnet 4 | $3.00 | $15.00 | 3.75x |
-| Claude Opus 4 | $15.00 | $75.00 | 18.75x |
+### High-risk or ambiguous work
 
-**Impact:** If 70% of messages are simple/medium, routing saves 60-80% compared to always using Opus.
+Examples:
 
-## Context Compression
+- architecture and security decisions;
+- complex debugging across multiple systems;
+- large refactors;
+- nuanced analysis;
+- tasks with expensive failure or unclear success criteria.
 
-When conversation exceeds 8 turns, automatically compress older context:
+Use a stronger model and preserve more context.
 
-1. **Summarize don't repeat** — Replace verbose history with a 2-3 sentence summary
-2. **Drop resolved topics** — If a question was answered, don't carry it forward
-3. **Keep only actionable context** — Names, decisions, pending tasks survive; chit-chat doesn't
-4. **File over memory** — Write important context to files instead of carrying it in conversation
+### Routing rules
 
-### Compression Template
+- Do not switch models only because a prompt is short or long.
+- Consider ambiguity, failure cost, verification difficulty, and required reasoning.
+- Keep the current model when the host cannot switch safely.
+- Do not claim savings from routing unless actual provider usage and task outcomes are available.
 
-When compressing, mentally replace old turns with:
+## 2. Keep only useful conversation state
+
+When a conversation becomes long:
+
+1. preserve names, constraints, decisions, unresolved questions, and next actions;
+2. drop resolved branches that no longer affect the current task;
+3. avoid repeating the user's request back to them;
+4. store durable project facts in files when the workspace supports it;
+5. keep exact source text when wording, legal meaning, code, or numerical detail matters;
+6. do not summarize aggressively if the task may depend on earlier exceptions or edge cases.
+
+Suggested compact state:
+
+```text
+[Goal]
+[Confirmed constraints]
+[Decisions]
+[Current artifacts]
+[Open risks]
+[Next action]
 ```
-[Context: <who> asked about <topic>. Decided <decision>. Pending: <next steps>]
-```
 
-## Reply Efficiency Rules
+## 3. Avoid repeated reads and repeated results
 
-### Length Matching
-- Yes/no → one line
-- Simple task → 1-3 sentences
-- Complex task → structured, no filler
-- **Never** open with "Great question!", "I'd be happy to help!", "Sure!", "Of course!"
-- **Never** close with "Let me know if you need anything else!"
+Before reading a file, URL, message, or tool result:
 
-### Smart Defaults
-- Act first, explain only if risky or asked
-- One combined command > multiple separate commands
-- Skip confirmatory reads of files just written
-- Don't echo back what user said
+- check whether the same content is already available;
+- prefer a targeted range, symbol, diff, or search result over a full file;
+- request only changed sections when prior content is still valid;
+- batch related reads when it reduces repeated setup overhead;
+- avoid reading a file again only to confirm content that was just written.
 
-## Tool Call Optimization
+Reread when correctness requires it, especially after external changes, concurrent edits, or failed writes.
 
-1. **Combine commands** — Use `cmd1; cmd2; cmd3` in one exec call
-2. **No speculative screenshots** — Only when explicitly asked
-3. **Skip redundant reads** — If file content is in context, don't re-read
-4. **Batch operations** — Multiple file edits in one turn when possible
-5. **Cache awareness** — Don't re-fetch URLs or re-query data already retrieved
+## 4. Match output length to task value
 
-## Anti-Patterns Checklist
+- yes/no or confirmation → one direct line;
+- simple task → a few complete sentences;
+- complex task → structured detail with no ceremonial filler;
+- do not restate large inputs unless transformation or verification requires it;
+- do not generate tables when a short explanation is clearer;
+- do not add generic openings or closings that provide no information.
 
-Before every reply, verify:
-- [ ] Complexity classified and model routed appropriately
-- [ ] No filler phrases
-- [ ] No unnecessary tool calls planned
-- [ ] Reply length matches question complexity
-- [ ] Not repeating information already in context
+Never trade away necessary warnings, assumptions, evidence, or error details merely to shorten the answer.
 
-## References
+## 5. Use tools economically
 
-- For detailed token pricing, cost formulas, and waste analysis: see [references/token-pricing.md](references/token-pricing.md)
+- combine independent operations when the tool supports safe batching;
+- avoid speculative calls that do not affect the answer;
+- use search before broad file reads;
+- prefer diffs and metadata over complete artifacts;
+- avoid screenshots unless visual inspection is required;
+- avoid repeated fetches of unchanged resources;
+- preserve separate calls when sequencing, permissions, or failure isolation matters.
 
-## Estimated Impact
+## 6. Protect cache-friendly prompt structure
 
-| Optimization | Cost Reduction |
-|---|---|
-| **Intelligent model routing** | **60-80% on simple/medium tasks** |
-| Context compression (8+ turns) | 40-60% input reduction |
-| Filler elimination | ~20-50 tokens/reply |
-| Tool call reduction | ~500-2000 tokens each avoided |
-| Concise formatting | ~30% output reduction |
-| Combined commands | ~40% tool overhead reduction |
+When the host or provider supports prompt caching:
 
-**Total estimated savings: 50-80% on monthly API costs**
+- keep stable instructions at the beginning;
+- place changing task data later;
+- avoid rewriting equivalent system instructions every turn;
+- avoid injecting timestamps, random IDs, or reordered tool definitions into stable prefixes;
+- load only relevant tools when dynamic tool loading is supported.
+
+Cache behavior is provider-specific. Treat local token estimates and billed cache usage as different measurements.
+
+## 7. Detect false savings
+
+An optimization may have removed important detail when the agent:
+
+- repeats the same tool call;
+- rereads the same file with a broader range;
+- asks for the original content;
+- reruns a command because evidence was missing;
+- produces a lower-quality or unverifiable result.
+
+When this occurs:
+
+1. recover or reread the original content;
+2. complete the task correctly;
+3. treat the earlier compression as a failed optimization;
+4. do not report the initial token reduction as a successful saving.
+
+## 8. Measurement discipline
+
+When usage data is available, distinguish:
+
+- estimated tokens;
+- provider-reported input tokens;
+- cached input tokens;
+- reasoning tokens;
+- output tokens;
+- retries and repeated tool calls;
+- task success.
+
+Use provider-reported usage as billing truth. Evaluate the full task, not a single request.
+
+## Pre-response checklist
+
+- [ ] Is the selected model appropriate for task risk?
+- [ ] Am I carrying resolved or duplicated context?
+- [ ] Can I use a targeted read, diff, or search instead of a full read?
+- [ ] Are planned tool calls necessary and safely batchable?
+- [ ] Does the answer length match the task?
+- [ ] Could shortening or compression remove evidence needed later?
+- [ ] Can task success be verified?
+
+## Scope
+
+This skill provides behavior guidance. It does not by itself guarantee interception of API requests, provider-level cache control, exact token accounting, or a fixed savings percentage. Those capabilities belong to the planned Token Saver Doctor, Gateway, Proof Ledger, and Quality Guard described in the repository roadmap.
