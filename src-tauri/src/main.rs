@@ -2,7 +2,9 @@
 
 use serde::Serialize;
 use std::{env, path::PathBuf};
-use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_opener::OpenerExt;
+
+const RELEASE_URL_PREFIX: &str = "https://github.com/SiruGao/token-saver/releases/";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,13 +22,6 @@ struct SessionFile {
     path: String,
     modified_at: String,
     content: String,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AppUpdateMetadata {
-    version: String,
-    current_version: String,
 }
 
 struct AgentDirectory {
@@ -112,43 +107,22 @@ fn scan_local_sessions() -> Vec<SessionFile> {
 }
 
 #[tauri::command]
-async fn check_app_update(app: tauri::AppHandle) -> Result<Option<AppUpdateMetadata>, String> {
-    let updater = app.updater().map_err(|error| error.to_string())?;
-    let update = updater.check().await.map_err(|error| error.to_string())?;
-    Ok(update.map(|available| AppUpdateMetadata {
-        version: available.version,
-        current_version: available.current_version,
-    }))
-}
-
-#[tauri::command]
-async fn install_app_update(app: tauri::AppHandle) -> Result<bool, String> {
-    let updater = app.updater().map_err(|error| error.to_string())?;
-    let Some(update) = updater.check().await.map_err(|error| error.to_string())? else {
-        return Ok(false);
-    };
-
-    update
-        .download_and_install(|_, _| {}, || {})
-        .await
-        .map_err(|error| error.to_string())?;
-    app.restart();
+fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !url.starts_with(RELEASE_URL_PREFIX) {
+        return Err("Only Token Saver GitHub Release URLs are allowed.".to_string());
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_process::init())
-        .setup(|app| {
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())?;
-            Ok(())
-        })
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             detect_integrations,
             scan_local_sessions,
-            check_app_update,
-            install_app_update
+            open_release_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running Token Saver");
