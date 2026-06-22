@@ -112,7 +112,7 @@ export interface AppSettings {
   localOnly: boolean;
   telemetry: boolean;
   autoScan: boolean;
-  autoCheckStrategyUpdates: boolean;
+  autoCheckStrategyUpdates?: boolean;
   largeOutputThreshold: number;
   repeatedReadWindowMinutes: number;
 }
@@ -122,7 +122,7 @@ export interface WorkspaceState {
   sessions: AgentSession[];
   findings: Finding[];
   integrations: Integration[];
-  strategies: CompressionStrategy[];
+  strategies?: CompressionStrategy[];
   settings: AppSettings;
   lastScanAt?: string;
   lastStrategyCheckAt?: string;
