@@ -163,6 +163,12 @@ export interface ProofRecord {
   provenance: string[];
 }
 
+export interface ProofStorageStatus {
+  mode: "sqlite" | "web-preview" | "fallback" | "initializing";
+  detail: string;
+  ready: boolean;
+}
+
 export type FixProposalKind = "internal" | "external-strategy" | "advice-only";
 export type FixProposalRisk = "low" | "medium" | "high";
 export type FixProposalStatus = "proposed" | "approved" | "previewed" | "applied" | "rejected";
@@ -200,6 +206,7 @@ export interface WorkspaceState {
   integrations: Integration[];
   strategies?: CompressionStrategy[];
   proofRecords?: ProofRecord[];
+  proofStorage?: ProofStorageStatus;
   fixProposals?: FixProposal[];
   settings: AppSettings;
   lastScanAt?: string;
