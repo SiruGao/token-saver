@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
-use std::{env, path::PathBuf};
+use std::{env, io::ErrorKind, path::PathBuf, process::Command};
 use tauri_plugin_opener::OpenerExt;
 
 const RELEASE_URL_PREFIX: &str = "https://github.com/SiruGao/token-saver/releases/";
@@ -22,6 +22,15 @@ struct SessionFile {
     path: String,
     modified_at: String,
     content: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StrategyRuntimeDetection {
+    strategy_id: String,
+    detected: bool,
+    version: Option<String>,
+    detail: String,
 }
 
 struct AgentDirectory {
@@ -106,6 +115,43 @@ fn scan_local_sessions() -> Vec<SessionFile> {
     Vec::new()
 }
 
+fn detect_rtk_runtime() -> StrategyRuntimeDetection {
+    match Command::new("rtk").arg("--version").output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let response = if stdout.is_empty() { stderr } else { stdout };
+            StrategyRuntimeDetection {
+                strategy_id: "rtk".to_string(),
+                detected: true,
+                version: output.status.success().then_some(response.clone()),
+                detail: if output.status.success() {
+                    "RTK responded to the read-only version check.".to_string()
+                } else {
+                    format!("RTK was found but the version check failed: {response}")
+                },
+            }
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => StrategyRuntimeDetection {
+            strategy_id: "rtk".to_string(),
+            detected: false,
+            version: None,
+            detail: "RTK was not found on the desktop PATH.".to_string(),
+        },
+        Err(error) => StrategyRuntimeDetection {
+            strategy_id: "rtk".to_string(),
+            detected: false,
+            version: None,
+            detail: format!("RTK could not be checked: {error}"),
+        },
+    }
+}
+
+#[tauri::command]
+fn detect_strategy_runtimes() -> Vec<StrategyRuntimeDetection> {
+    vec![detect_rtk_runtime()]
+}
+
 #[tauri::command]
 fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     if !url.starts_with(RELEASE_URL_PREFIX) {
@@ -122,6 +168,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             detect_integrations,
             scan_local_sessions,
+            detect_strategy_runtimes,
             open_release_url
         ])
         .run(tauri::generate_context!())
