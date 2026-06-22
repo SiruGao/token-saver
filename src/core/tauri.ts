@@ -9,14 +9,15 @@ export interface NativeAppUpdate {
 
 const CURRENT_VERSION = "1.0.0";
 const LATEST_RELEASE = "https://api.github.com/repos/SiruGao/token-saver/releases/latest";
+const RELEASE_URL_PREFIX = "https://github.com/SiruGao/token-saver/releases/";
 
 export function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window;
 }
 
-async function invoke<T>(command: string): Promise<T> {
+async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const api = await import("@tauri-apps/api/core");
-  return api.invoke<T>(command);
+  return api.invoke<T>(command, args);
 }
 
 function newer(candidate: string, current: string): boolean {
@@ -27,6 +28,17 @@ function newer(candidate: string, current: string): boolean {
     if (difference !== 0) return difference > 0;
   }
   return false;
+}
+
+export function isTrustedReleaseUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:"
+      && parsed.hostname === "github.com"
+      && parsed.pathname.startsWith("/SiruGao/token-saver/releases/");
+  } catch {
+    return false;
+  }
 }
 
 export async function detectNativeIntegrations(): Promise<NativeIntegration[]> {
@@ -54,12 +66,24 @@ export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
   };
   const version = release.tag_name?.replace(/^v/, "");
   if (!version || release.draft || !newer(version, CURRENT_VERSION)) return null;
+  if (!release.html_url || !isTrustedReleaseUrl(release.html_url)) {
+    throw new Error("GitHub returned an untrusted release URL");
+  }
   return {
     version,
     currentVersion: CURRENT_VERSION,
     releaseUrl: release.html_url,
     publishedAt: release.published_at,
   };
+}
+
+export async function openReleasePage(url: string): Promise<void> {
+  if (!isTrustedReleaseUrl(url)) throw new Error("Untrusted release URL");
+  if (isTauriRuntime()) {
+    await invoke<void>("open_release_url", { url });
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export function runtimeLabel(): string {
