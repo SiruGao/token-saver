@@ -105,6 +105,13 @@ fn scan_local_sessions() -> Vec<SessionFile> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![detect_integrations, scan_local_sessions])
         .run(tauri::generate_context!())
         .expect("error while running Token Saver");
