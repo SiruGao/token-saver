@@ -2,9 +2,9 @@
 
 # ⚡ Token Saver Desktop
 
-### Local-first token efficiency for AI agents
+### The neutral control plane for AI-agent token efficiency
 
-**Find where your AI tokens go. Diagnose waste safely. Measure cost per successful task.**
+**Diagnose waste. Match the right compression strategy. Verify cost per successful task.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Desktop V1](https://img.shields.io/badge/Desktop-V1.0-7c5cff.svg)](docs/V1.md)
@@ -12,7 +12,7 @@
 [![Local first](https://img.shields.io/badge/privacy-local--first-32d2a0.svg)](#privacy)
 [![CI](https://github.com/SiruGao/token-saver/actions/workflows/ci.yml/badge.svg)](https://github.com/SiruGao/token-saver/actions/workflows/ci.yml)
 
-[Get started](#get-started) · [V1 scope](docs/V1.md) · [Architecture](docs/ARCHITECTURE.md) · [Benchmarks](docs/BENCHMARKS.md) · [Roadmap](ROADMAP.md)
+[Get started](#get-started) · [Strategy Hub](docs/STRATEGY_HUB.md) · [V1 scope](docs/V1.md) · [Benchmarks](docs/BENCHMARKS.md) · [Roadmap](ROADMAP.md)
 
 [English](README.md) · [中文说明](README_CN.md)
 
@@ -20,7 +20,20 @@
 
 ---
 
-Token Saver is an open-source desktop application that analyzes user-selected AI-agent transcripts, identifies avoidable token waste, and explains how to reduce it without hiding quality regressions behind a compression percentage.
+Token Saver is a local-first desktop application that diagnoses AI-agent token waste and coordinates compatible third-party compression strategies through one interface.
+
+It is not trying to own every compression algorithm. The product is the control loop around them:
+
+```text
+Doctor → Policy → Strategy Adapter → Proof
+```
+
+- **Doctor** identifies repeated context, oversized output, cache drift, and possible rework.
+- **Strategy Hub** maps those findings to compatible external engines.
+- **Update Center** tracks upstream versions without silently installing them.
+- **Proof** will compare tokens, retries, latency, task quality, and real provider cost.
+
+The primary metric is:
 
 ```text
 Cost per successful task
@@ -28,21 +41,42 @@ Cost per successful task
   ÷ successfully completed tasks
 ```
 
-The desktop application is now the product. The OpenClaw `SKILL.md` remains an optional integration.
-
 ## Desktop V1
 
-V1 is a working read-only analyzer with its own desktop UI.
+V1 is a working read-only desktop analyzer and strategy registry.
 
 - **Dashboard** — token usage, estimated cost, avoidable input, task signals, and agent breakdown.
-- **Doctor** — repeated reads, repeated results, oversized output, long instructions, prompt-prefix drift, and possible rework.
+- **Doctor** — six deterministic waste rules with evidence and remediation.
+- **Strategy Hub** — neutral registry, Doctor-driven recommendations, risk labels, compatibility metadata, release checks, and user selection.
 - **Sessions** — task usage, event timelines, and linked findings.
-- **Integrations** — detects local installations of Claude Code, Codex, OpenClaw, Hermes, OpenCode, and Cursor.
-- **Explicit import** — analyzes JSON, JSONL, or text transcript files selected by the user.
-- **Usage normalization** — preserves common provider usage fields and estimates missing values.
+- **Integrations** — detects Claude Code, Codex, OpenClaw, Hermes, OpenCode, and Cursor installations.
+- **Explicit import** — analyzes JSON, JSONL, or text transcripts selected by the user.
 - **Local workspace** — local persistence, JSON report export, data deletion, and a safe demo workspace.
 
-V1 does not automatically read agent files or change prompts, commands, or configuration.
+V1 does not automatically execute third-party strategies or modify prompts, commands, workspaces, or agent configuration.
+
+## Initial strategy registry
+
+| Strategy | Role | License | V1 integration level |
+|---|---|---|---|
+| RTK | Command, test, Git, and log output filtering | Apache-2.0 | Registry, recommendations, release tracking |
+| Headroom | Proxy, wrapper, library, MCP, cache alignment, reversible retrieval | Apache-2.0 | Registry, recommendations, release tracking |
+| Claw Compactor | Workspace and transcript compaction with dry-run benchmarking | MIT | Registry, recommendations, release tracking |
+
+Each project keeps its own license, release channel, security model, and runtime. Registry inclusion does not imply ownership, endorsement, or bundling.
+
+## Why this can become defensible
+
+A list of compression tools is easy to copy. The harder assets are:
+
+- one normalized event and task model across agents;
+- evidence linking Doctor findings to strategy outcomes;
+- a compatibility matrix across strategy, version, agent, model, and content type;
+- staged updates, health checks, rollback, and pinned releases;
+- quality-adjusted measurement rather than raw compression percentage;
+- privacy-preserving routing data showing which strategy works for which task.
+
+Read [docs/STRATEGY_HUB.md](docs/STRATEGY_HUB.md).
 
 ## Doctor rules
 
@@ -55,19 +89,16 @@ V1 does not automatically read agent files or change prompts, commands, or confi
 | Prompt-prefix drift | System prefixes varying across sessions |
 | Possible rework | A tool called unusually often |
 
+Doctor recommendations are shortlists, not automatic execution orders.
+
 ## Get started
 
-Requirements: Node.js 20+, npm, and the Tauri 2 platform prerequisites for native desktop development.
+Requirements: Node.js 20+, npm, and Tauri 2 platform prerequisites for native desktop development.
 
 ```bash
-# Web preview
 npm install
-npm run dev
-
-# Desktop development
-npm run desktop:dev
-
-# Native bundle
+npm run dev          # web preview
+npm run desktop:dev  # desktop development
 npm run desktop:build
 ```
 
@@ -77,57 +108,44 @@ Native bundles are written under:
 src-tauri/target/release/bundle/
 ```
 
-A GitHub Actions workflow is included for macOS, Windows, and Linux builds.
-
 ## Architecture
 
 ```text
-Detected AI-agent installations
-              │
-User-selected transcript files
-              │
-        Token Saver Desktop
-              │
-  Normalizer · Usage Meter
-  Doctor · Sessions · Export
-              │
-      local application data
+User-selected transcripts
+          │
+        Doctor
+          │ findings + evidence
+     Strategy Policy
+          │ compatible shortlist
+   External Adapters
+ RTK · Headroom · others
+          │
+        Proof
+ tokens · cost · rework · quality
 ```
 
-The native component checks whether known application directories exist. Transcript contents enter the analyzer only after the user explicitly selects or drops a file.
-
-## Repository structure
-
-```text
-src/              TypeScript UI and analysis engine
-src-tauri/        Tauri 2 native shell and installation detection
-docs/V1.md        V1 scope and acceptance criteria
-SKILL.md           Optional OpenClaw integration
-ROADMAP.md         Product milestones
-```
+The current V1 stops before external execution. Adapter execution moves through observe, preview, apply-with-recovery, and automatic-routing safety levels.
 
 ## Privacy
 
 - no account is required;
 - no telemetry is implemented;
-- analysis runs on the device;
-- transcript files are not uploaded;
+- transcript analysis runs locally;
 - native detection does not read agent files;
+- upstream update checks request public release metadata only;
 - imported data can be exported or deleted from Settings.
-
-Imported transcripts may contain private information. Review files before sharing exports or benchmark fixtures.
 
 ## Current limitations
 
-V1 does not yet include automatic transcript ingestion, provider proxying, automatic compression, billing integration, quality replay, SQLite storage, signed public installers, or version-perfect parsing for every agent.
+V1 does not yet execute strategy adapters, install upstream tools, ingest transcripts automatically, proxy providers, apply compression, reconcile billing, run quality replay, or provide signed public installers.
 
 ## Product direction
 
 ```text
-V1    Desktop analyzer and Doctor
-V1.1  Agent-specific parsers and SQLite ledger
-V1.2  Exact deduplication, cache alignment, reversible compaction
-V2    Local Gateway, quality replay, verified cost-per-success reporting
+V1    Doctor + Strategy Registry + release visibility
+V1.1  Runtime detection, dry-run adapters, SQLite ledger
+V1.2  Pinned execution, health checks, rollback, reversible strategies
+V2    Automatic policy routing, holdouts, quality replay, verified cost-per-success
 ```
 
 ## OpenClaw integration
@@ -136,7 +154,7 @@ V2    Local Gateway, quality replay, verified cost-per-success reporting
 openclaw skills install token-saver
 ```
 
-The skill remains available as an optional behavior-policy integration.
+The original skill remains an optional behavior-policy integration.
 
 ## License
 
