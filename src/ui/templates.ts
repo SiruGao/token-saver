@@ -6,6 +6,7 @@ export const NAV_ITEMS: Array<{ id: ViewId; label: string; icon: string }> = [
   { id: "dashboard", label: "Dashboard", icon: "◫" },
   { id: "doctor", label: "Doctor", icon: "✦" },
   { id: "strategies", label: "Strategies", icon: "⌁" },
+  { id: "proof", label: "Proof", icon: "◎" },
   { id: "sessions", label: "Sessions", icon: "≡" },
   { id: "integrations", label: "Integrations", icon: "⌘" },
   { id: "settings", label: "Settings", icon: "⚙" },
@@ -30,16 +31,18 @@ export function dashboardView(state: WorkspaceState): string {
   const high = state.findings.filter((item) => item.severity === "high").length;
   const score = efficiencyScore(state.findings);
   const top = state.findings[0];
-  return `<section class="protection-hero ${high ? "attention" : "healthy"}"><div><span class="eyebrow">PROTECTION STATUS</span><h2>${high ? `${high} high-impact issue${high === 1 ? "" : "s"}` : "Workspace looks healthy"}</h2><p>${state.sessions.length} sessions analyzed · score ${score}/100</p></div><div><button class="button primary" data-nav="doctor">Review Doctor</button><button class="button ghost" id="dashboard-import">Import session</button></div></section><div class="metric-grid">${metric("Tokens observed", compactNumber(tokens), `${state.sessions.length} sessions`)}${metric("Avoidable", compactNumber(avoidable), tokens ? percent(avoidable / tokens) : "0%", "warning")}${metric("Estimated cost", currency(cost), "local estimate")}${metric("Success signals", percent(success), "from transcripts", "positive")}</div><article class="panel next-action-card"><span class="eyebrow">NEXT ACTION</span><h2>${top ? escapeHtml(top.title) : "No immediate action"}</h2><p>${top ? escapeHtml(top.evidence) : "Doctor found no major context waste."}</p>${top ? `<button class="button primary" data-nav="doctor">Review finding</button>` : ""}</article>`;
+  return `<section class="protection-hero ${high ? "attention" : "healthy"}"><div><span class="eyebrow">PROTECTION STATUS</span><h2>${high ? `${high} high-impact issue${high === 1 ? "" : "s"}` : "Workspace looks healthy"}</h2><p>${state.sessions.length} sessions analyzed · score ${score}/100</p></div><div><button class="button primary" data-nav="doctor">Review Doctor</button><button class="button ghost" data-nav="proof">View Proof</button></div></section><div class="metric-grid">${metric("Tokens observed", compactNumber(tokens), `${state.sessions.length} sessions`)}${metric("Avoidable", compactNumber(avoidable), tokens ? percent(avoidable / tokens) : "0%", "warning")}${metric("Estimated cost", currency(cost), "local estimate")}${metric("Success signals", percent(success), "from transcripts", "positive")}</div><article class="panel next-action-card"><span class="eyebrow">NEXT ACTION</span><h2>${top ? escapeHtml(top.title) : "No immediate action"}</h2><p>${top ? escapeHtml(top.evidence) : "Doctor found no major context waste."}</p>${top ? `<button class="button primary" data-nav="doctor">Review finding</button>` : ""}</article>`;
 }
 
-function card(item: Finding): string {
-  return `<article class="finding-card"><div class="finding-top"><span class="severity ${item.severity}">${item.severity}</span><strong>${item.estimatedTokens ? `${compactNumber(item.estimatedTokens)} avoidable` : "Review"}</strong></div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description)}</p><div class="evidence"><span>Evidence</span>${escapeHtml(item.evidence)}</div><div class="recommendation"><span>Action</span>${escapeHtml(item.recommendation)}</div><div>${item.sessionId ? `<button class="text-button" data-session="${item.sessionId}">Inspect session</button>` : ""}<button class="button ghost" data-nav="strategies">Review strategies</button></div></article>`;
+function findingCard(item: Finding, state: WorkspaceState): string {
+  const proposal = state.fixProposals?.find((candidate) => candidate.findingId === item.id);
+  const proposalView = proposal ? `<div class="fix-proposal"><div><span class="proposal-kind">${escapeHtml(proposal.kind)}</span><span class="proposal-risk ${proposal.risk}">${escapeHtml(proposal.risk)} risk</span></div><strong>${escapeHtml(proposal.action)}</strong><small>${proposal.reversible ? "Reversible" : "Review only"}${proposal.requiresBackup ? " · backup required" : ""}</small></div>` : "";
+  return `<article class="finding-card"><div class="finding-top"><span class="severity ${item.severity}">${item.severity}</span><strong>${item.estimatedTokens ? `${compactNumber(item.estimatedTokens)} avoidable` : "Review"}</strong></div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.description)}</p><div class="evidence"><span>Evidence</span>${escapeHtml(item.evidence)}</div>${proposalView}<div><button class="button ghost" data-nav="${proposal?.strategyId ? "strategies" : "proof"}">${proposal?.strategyId ? "Review strategy" : "View baseline"}</button></div></article>`;
 }
 
 export function doctorView(state: WorkspaceState): string {
   const score = efficiencyScore(state.findings);
-  return `<div class="doctor-hero"><div class="score-ring large" style="--score:${score}"><strong>${score}</strong><span>/100</span></div><div><span class="eyebrow">CONTEXT HEALTH</span><h2>Evidence before action</h2><p>Doctor diagnoses waste and keeps external strategies optional.</p></div></div><div class="finding-grid">${state.findings.length ? state.findings.map(card).join("") : `<article class="panel"><h2>No findings yet</h2><button class="button primary" id="doctor-import">Import transcript</button></article>`}</div>`;
+  return `<div class="doctor-hero"><div class="score-ring large" style="--score:${score}"><strong>${score}</strong><span>/100</span></div><div><span class="eyebrow">CONTEXT HEALTH</span><h2>Evidence before action</h2><p>Doctor classifies each finding as an internal fix, external strategy, or advice-only review.</p></div></div><div class="finding-grid">${state.findings.length ? state.findings.map((item) => findingCard(item, state)).join("") : `<article class="panel"><h2>No findings yet</h2><button class="button primary" id="doctor-import">Import transcript</button></article>`}</div>`;
 }
 
 function row(item: AgentSession): string {

@@ -4,10 +4,12 @@ import { analyzeSessions, parseTranscript } from "./core/import-router";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
 import { checkNativeAppUpdate, detectNativeIntegrations, isTauriRuntime, runtimeLabel } from "./core/tauri";
 import { demoWorkspace, emptyWorkspace } from "./data/demo";
+import { syncFixProposals } from "./fixes/proposals";
 import { syncBaselineRecords } from "./proof/ledger";
 import { mergeStrategyRegistry } from "./strategies/registry";
 import { checkStrategyUpdates } from "./strategies/updates";
 import type { AgentSession, ViewId, WorkspaceState } from "./types";
+import { proofView } from "./ui/proof";
 import { strategiesView } from "./ui/strategies";
 import { dashboardView, doctorView, integrationsView, sessionsView, settingsView, shell } from "./ui/templates";
 
@@ -17,16 +19,20 @@ if (!appNode || !transcriptNode) throw new Error("Token Saver failed to initiali
 const app = appNode;
 const transcriptInput = transcriptNode;
 
-const hydrate = (value: WorkspaceState): WorkspaceState => ({
-  ...value,
-  strategies: mergeStrategyRegistry(value.strategies),
-  proofRecords: value.proofRecords ?? [],
-  settings: {
-    ...value.settings,
-    autoCheckAppUpdates: value.settings.autoCheckAppUpdates ?? true,
-    autoCheckStrategyUpdates: value.settings.autoCheckStrategyUpdates ?? true,
-  },
-});
+function hydrate(value: WorkspaceState): WorkspaceState {
+  const strategies = mergeStrategyRegistry(value.strategies);
+  return {
+    ...value,
+    strategies,
+    proofRecords: value.proofRecords ?? [],
+    fixProposals: syncFixProposals(value.findings, strategies, value.fixProposals),
+    settings: {
+      ...value.settings,
+      autoCheckAppUpdates: value.settings.autoCheckAppUpdates ?? true,
+      autoCheckStrategyUpdates: value.settings.autoCheckStrategyUpdates ?? true,
+    },
+  };
+}
 
 let state = hydrate(loadWorkspace(emptyWorkspace()));
 let activeView: ViewId = "dashboard";
@@ -41,6 +47,7 @@ function commit(next: WorkspaceState): void {
 function currentView(): string {
   if (activeView === "doctor") return doctorView(state);
   if (activeView === "strategies") return strategiesView(state);
+  if (activeView === "proof") return proofView(state);
   if (activeView === "sessions") return sessionsView(state, selectedSessionId);
   if (activeView === "integrations") return integrationsView(state);
   if (activeView === "settings") return settingsView(state);
@@ -69,7 +76,8 @@ async function importFiles(files: FileList | File[]): Promise<void> {
   if (imported.length) {
     const findings = analyzeSessions(sessions, state.settings.largeOutputThreshold);
     const proofRecords = syncBaselineRecords(sessions, findings, state.proofRecords);
-    commit({ ...state, sessions, findings, proofRecords });
+    const fixProposals = syncFixProposals(findings, mergeStrategyRegistry(state.strategies), state.fixProposals);
+    commit({ ...state, sessions, findings, proofRecords, fixProposals });
     toast(`Imported ${imported.length} session${imported.length === 1 ? "" : "s"} and recorded baselines.`, "success");
   }
 }
@@ -89,7 +97,8 @@ async function detectTools(): Promise<void> {
 async function refreshStrategies(show = true): Promise<void> {
   try {
     const strategies = await checkStrategyUpdates(mergeStrategyRegistry(state.strategies));
-    commit({ ...state, strategies, lastStrategyCheckAt: new Date().toISOString() });
+    const fixProposals = syncFixProposals(state.findings, strategies, state.fixProposals);
+    commit({ ...state, strategies, fixProposals, lastStrategyCheckAt: new Date().toISOString() });
     if (show) toast("Strategy registry refreshed.", "success");
   } catch (error) { if (show) toast(`Registry refresh failed: ${String(error)}`, "error"); }
 }
@@ -121,7 +130,7 @@ function bind(): void {
     render();
   });
   const openImport = () => transcriptInput.click();
-  ["#import-button", "#empty-import", "#dashboard-import", "#doctor-import"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", openImport));
+  ["#import-button", "#empty-import", "#dashboard-import", "#doctor-import", "#proof-import"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", openImport));
   ["#scan-button", "#empty-scan", "#integration-scan"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", () => void detectTools()));
   document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
   document.querySelector("#app-update-check")?.addEventListener("click", () => void refreshApp());

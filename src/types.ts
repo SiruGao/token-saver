@@ -9,7 +9,7 @@ export type AgentId =
 
 export type SessionStatus = "success" | "failed" | "unknown";
 export type FindingSeverity = "low" | "medium" | "high";
-export type ViewId = "dashboard" | "doctor" | "strategies" | "sessions" | "integrations" | "settings";
+export type ViewId = "dashboard" | "doctor" | "strategies" | "proof" | "sessions" | "integrations" | "settings";
 
 export interface TokenUsage {
   input: number;
@@ -158,6 +158,25 @@ export interface ProofRecord {
   provenance: string[];
 }
 
+export type FixProposalKind = "internal" | "external-strategy" | "advice-only";
+export type FixProposalRisk = "low" | "medium" | "high";
+export type FixProposalStatus = "proposed" | "approved" | "previewed" | "applied" | "rejected";
+
+export interface FixProposal {
+  id: string;
+  findingId: string;
+  sessionId?: string;
+  title: string;
+  kind: FixProposalKind;
+  risk: FixProposalRisk;
+  status: FixProposalStatus;
+  action: string;
+  strategyId?: string;
+  reversible: boolean;
+  requiresBackup: boolean;
+  rationale: string;
+}
+
 export interface AppSettings {
   theme: "dark" | "light" | "system";
   localOnly: boolean;
@@ -176,6 +195,7 @@ export interface WorkspaceState {
   integrations: Integration[];
   strategies?: CompressionStrategy[];
   proofRecords?: ProofRecord[];
+  fixProposals?: FixProposal[];
   settings: AppSettings;
   lastScanAt?: string;
   lastStrategyCheckAt?: string;
