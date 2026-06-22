@@ -1,8 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
-use std::{env, path::PathBuf};
-use tauri_plugin_updater::UpdaterExt;
+use std::{env, io::ErrorKind, path::PathBuf, process::Command};
+use tauri_plugin_opener::OpenerExt;
+
+const RELEASE_URL_PREFIX: &str = "https://github.com/SiruGao/token-saver/releases/";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,9 +26,12 @@ struct SessionFile {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct AppUpdateMetadata {
-    version: String,
-    current_version: String,
+struct StrategyRuntimeDetection {
+    strategy_id: String,
+    detected: bool,
+    healthy: bool,
+    version: Option<String>,
+    detail: String,
 }
 
 struct AgentDirectory {
@@ -111,44 +116,72 @@ fn scan_local_sessions() -> Vec<SessionFile> {
     Vec::new()
 }
 
-#[tauri::command]
-async fn check_app_update(app: tauri::AppHandle) -> Result<Option<AppUpdateMetadata>, String> {
-    let updater = app.updater().map_err(|error| error.to_string())?;
-    let update = updater.check().await.map_err(|error| error.to_string())?;
-    Ok(update.map(|available| AppUpdateMetadata {
-        version: available.version,
-        current_version: available.current_version,
-    }))
+fn detect_rtk_runtime() -> StrategyRuntimeDetection {
+    match Command::new("rtk").arg("--version").output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let response = if stdout.is_empty() { stderr } else { stdout };
+            let identity_matches = response
+                .split_whitespace()
+                .next()
+                .is_some_and(|name| name.eq_ignore_ascii_case("rtk"));
+            let healthy = output.status.success() && identity_matches;
+            StrategyRuntimeDetection {
+                strategy_id: "rtk".to_string(),
+                detected: true,
+                healthy,
+                version: output.status.success().then_some(response.clone()),
+                detail: if healthy {
+                    "RTK responded with the expected identity to the read-only version check."
+                        .to_string()
+                } else if output.status.success() {
+                    format!("An executable named rtk responded with an unexpected identity: {response}")
+                } else {
+                    format!("RTK was found but the version check failed: {response}")
+                },
+            }
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => StrategyRuntimeDetection {
+            strategy_id: "rtk".to_string(),
+            detected: false,
+            healthy: false,
+            version: None,
+            detail: "RTK was not found on the desktop PATH.".to_string(),
+        },
+        Err(error) => StrategyRuntimeDetection {
+            strategy_id: "rtk".to_string(),
+            detected: false,
+            healthy: false,
+            version: None,
+            detail: format!("RTK could not be checked: {error}"),
+        },
+    }
 }
 
 #[tauri::command]
-async fn install_app_update(app: tauri::AppHandle) -> Result<bool, String> {
-    let updater = app.updater().map_err(|error| error.to_string())?;
-    let Some(update) = updater.check().await.map_err(|error| error.to_string())? else {
-        return Ok(false);
-    };
+fn detect_strategy_runtimes() -> Vec<StrategyRuntimeDetection> {
+    vec![detect_rtk_runtime()]
+}
 
-    update
-        .download_and_install(|_, _| {}, || {})
-        .await
-        .map_err(|error| error.to_string())?;
-    app.restart();
+#[tauri::command]
+fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !url.starts_with(RELEASE_URL_PREFIX) {
+        return Err("Only Token Saver GitHub Release URLs are allowed.".to_string());
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_process::init())
-        .setup(|app| {
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())?;
-            Ok(())
-        })
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             detect_integrations,
             scan_local_sessions,
-            check_app_update,
-            install_app_update
+            detect_strategy_runtimes,
+            open_release_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running Token Saver");

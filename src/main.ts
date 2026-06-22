@@ -2,11 +2,19 @@ import "./styles.css";
 import "./strategy.css";
 import { analyzeSessions, parseTranscript } from "./core/import-router";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
-import { checkNativeAppUpdate, detectNativeIntegrations, isTauriRuntime, runtimeLabel } from "./core/tauri";
+import {
+  checkNativeAppUpdate,
+  detectNativeIntegrations,
+  detectNativeStrategyRuntimes,
+  isTauriRuntime,
+  openReleasePage,
+  runtimeLabel,
+} from "./core/tauri";
 import { demoWorkspace, emptyWorkspace } from "./data/demo";
 import { syncFixProposals } from "./fixes/proposals";
 import { syncBaselineRecords } from "./proof/ledger";
 import { mergeStrategyRegistry } from "./strategies/registry";
+import { applyRuntimeDetections } from "./strategies/runtime";
 import { checkStrategyUpdates } from "./strategies/updates";
 import type { AgentSession, ViewId, WorkspaceState } from "./types";
 import { proofView } from "./ui/proof";
@@ -103,6 +111,24 @@ async function refreshStrategies(show = true): Promise<void> {
   } catch (error) { if (show) toast(`Registry refresh failed: ${String(error)}`, "error"); }
 }
 
+async function refreshStrategyRuntimes(): Promise<void> {
+  if (!isTauriRuntime()) return toast("Runtime detection requires the desktop application.");
+  try {
+    const detected = await detectNativeStrategyRuntimes();
+    const strategies = applyRuntimeDetections(
+      mergeStrategyRegistry(state.strategies),
+      detected,
+      new Date().toISOString(),
+    );
+    commit({ ...state, strategies });
+    const found = detected.filter((item) => item.detected).length;
+    const healthy = detected.filter((item) => item.healthy).length;
+    toast(`Detected ${found} runtime${found === 1 ? "" : "s"}; ${healthy} healthy.`, healthy ? "success" : "info");
+  } catch (error) {
+    toast(`Runtime detection failed: ${String(error)}`, "error");
+  }
+}
+
 async function refreshApp(show = true): Promise<void> {
   const checkedAt = new Date().toISOString();
   try {
@@ -111,11 +137,24 @@ async function refreshApp(show = true): Promise<void> {
       currentVersion: result?.currentVersion ?? "1.0.0",
       latestVersion: result?.version,
       available: Boolean(result),
+      releaseUrl: result?.releaseUrl,
+      publishedAt: result?.publishedAt,
       checkedAt,
       source: result ? "github-release" : "unavailable",
     }});
     if (show) toast(result ? `Version ${result.version} is available.` : "Token Saver is current.", "success");
   } catch (error) { if (show) toast(`Update check failed: ${String(error)}`, "error"); }
+}
+
+async function openAvailableRelease(): Promise<void> {
+  const url = state.appUpdate?.releaseUrl;
+  if (!url) return toast("No trusted release link is available.", "error");
+  try {
+    await openReleasePage(url);
+    toast("Opened the GitHub Release in your system browser.", "success");
+  } catch (error) {
+    toast(`Could not open the release: ${String(error)}`, "error");
+  }
 }
 
 function bind(): void {
@@ -133,7 +172,9 @@ function bind(): void {
   ["#import-button", "#empty-import", "#dashboard-import", "#doctor-import", "#proof-import"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", openImport));
   ["#scan-button", "#empty-scan", "#integration-scan"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", () => void detectTools()));
   document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
+  document.querySelector("#strategy-runtime-check")?.addEventListener("click", () => void refreshStrategyRuntimes());
   document.querySelector("#app-update-check")?.addEventListener("click", () => void refreshApp());
+  document.querySelector("#app-update-open")?.addEventListener("click", () => void openAvailableRelease());
   document.querySelector("#demo-button")?.addEventListener("click", () => commit(demoWorkspace()));
   document.querySelector("#back-to-sessions")?.addEventListener("click", () => { selectedSessionId = undefined; render(); });
   document.querySelector("#export-button")?.addEventListener("click", () => exportWorkspace(state));
