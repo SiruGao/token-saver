@@ -1,6 +1,11 @@
 import type { NativeIntegration, NativeSessionFile } from "../types";
 
-function isTauriRuntime(): boolean {
+export interface NativeAppUpdate {
+  version: string;
+  currentVersion: string;
+}
+
+export function isTauriRuntime(): boolean {
   return "__TAURI_INTERNALS__" in window;
 }
 
@@ -17,6 +22,16 @@ export async function detectNativeIntegrations(): Promise<NativeIntegration[]> {
 export async function scanNativeSessions(): Promise<NativeSessionFile[]> {
   if (!isTauriRuntime()) return [];
   return invoke<NativeSessionFile[]>("scan_local_sessions");
+}
+
+export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
+  if (!isTauriRuntime()) return null;
+  return invoke<NativeAppUpdate | null>("check_app_update");
+}
+
+export async function installNativeAppUpdate(): Promise<boolean> {
+  if (!isTauriRuntime()) return false;
+  return invoke<boolean>("install_app_update");
 }
 
 export function runtimeLabel(): string {
