@@ -40,6 +40,20 @@ The migration sequence is intentionally conservative:
 
 If any database step fails, Token Saver keeps the original Proof records in local workspace storage and reports fallback mode. It does not block transcript import or Doctor analysis.
 
+## Crash-safe ongoing writes
+
+After migration, the browser workspace acts as a short-lived write-ahead journal for new Proof data:
+
+1. save the new Proof snapshot to local workspace storage;
+2. enqueue the SQLite write behind earlier Proof writes;
+3. persist a cloned, immutable snapshot through parameterized SQL;
+4. acknowledge only the latest queued generation;
+5. remove the duplicate local copy only after the latest generation is confirmed in SQLite.
+
+A later non-Proof settings change cannot remove the local journal while a database write is still pending. If the latest write fails, Token Saver invalidates the queue, keeps the full local copy, and switches the UI to fallback mode.
+
+Clearing local data pauses new Proof writes, invalidates queued generations, waits for the write queue to drain, deletes SQLite rows, and only then clears the remaining workspace. A failed database deletion is reported and the application does not claim the ledger was cleared.
+
 ## Immutability rules
 
 Baseline records use `INSERT OR IGNORE` semantics. Re-importing the same session cannot replace an existing baseline.
@@ -78,7 +92,7 @@ Remote web content is not granted database access.
 
 ## Clearing data
 
-The Clear Local Data action deletes Proof rows from SQLite before clearing the remaining local workspace. If the database deletion fails, the application does not pretend the operation succeeded.
+The Clear Local Data action drains the Proof write queue and deletes Proof rows from SQLite before clearing the remaining local workspace. If the database deletion fails, the application does not pretend the operation succeeded.
 
 ## Future migrations
 
