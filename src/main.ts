@@ -5,6 +5,7 @@ import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from ".
 import {
   checkNativeAppUpdate,
   detectNativeIntegrations,
+  detectNativeStrategyRuntimes,
   isTauriRuntime,
   openReleasePage,
   runtimeLabel,
@@ -109,6 +110,34 @@ async function refreshStrategies(show = true): Promise<void> {
   } catch (error) { if (show) toast(`Registry refresh failed: ${String(error)}`, "error"); }
 }
 
+async function refreshStrategyRuntimes(): Promise<void> {
+  if (!isTauriRuntime()) return toast("Runtime detection requires the desktop application.");
+  try {
+    const detected = await detectNativeStrategyRuntimes();
+    const checkedAt = new Date().toISOString();
+    const strategies = mergeStrategyRegistry(state.strategies).map((strategy) => {
+      const runtime = detected.find((item) => item.strategyId === strategy.id);
+      if (!runtime) return strategy;
+      return {
+        ...strategy,
+        runtimeDetected: runtime.detected,
+        runtimeVersion: runtime.version,
+        runtimeCheckedAt: checkedAt,
+        runtimeDetail: runtime.detail,
+        installedVersion: runtime.detected ? runtime.version ?? strategy.installedVersion : undefined,
+        state: runtime.detected
+          ? strategy.state === "update-available" ? "update-available" : "installed"
+          : strategy.state === "installed" ? "available" : strategy.state,
+      };
+    });
+    commit({ ...state, strategies });
+    const found = detected.filter((item) => item.detected).length;
+    toast(`Detected ${found} supported strategy runtime${found === 1 ? "" : "s"}.`, "success");
+  } catch (error) {
+    toast(`Runtime detection failed: ${String(error)}`, "error");
+  }
+}
+
 async function refreshApp(show = true): Promise<void> {
   const checkedAt = new Date().toISOString();
   try {
@@ -152,6 +181,7 @@ function bind(): void {
   ["#import-button", "#empty-import", "#dashboard-import", "#doctor-import", "#proof-import"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", openImport));
   ["#scan-button", "#empty-scan", "#integration-scan"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", () => void detectTools()));
   document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
+  document.querySelector("#strategy-runtime-check")?.addEventListener("click", () => void refreshStrategyRuntimes());
   document.querySelector("#app-update-check")?.addEventListener("click", () => void refreshApp());
   document.querySelector("#app-update-open")?.addEventListener("click", () => void openAvailableRelease());
   document.querySelector("#demo-button")?.addEventListener("click", () => commit(demoWorkspace()));
