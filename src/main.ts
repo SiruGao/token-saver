@@ -121,18 +121,20 @@ async function refreshStrategyRuntimes(): Promise<void> {
       return {
         ...strategy,
         runtimeDetected: runtime.detected,
+        runtimeHealthy: runtime.healthy,
         runtimeVersion: runtime.version,
         runtimeCheckedAt: checkedAt,
         runtimeDetail: runtime.detail,
         installedVersion: runtime.detected ? runtime.version ?? strategy.installedVersion : undefined,
-        state: runtime.detected
+        state: runtime.healthy
           ? strategy.state === "update-available" ? "update-available" : "installed"
           : strategy.state === "installed" ? "available" : strategy.state,
       };
     });
     commit({ ...state, strategies });
     const found = detected.filter((item) => item.detected).length;
-    toast(`Detected ${found} supported strategy runtime${found === 1 ? "" : "s"}.`, "success");
+    const healthy = detected.filter((item) => item.healthy).length;
+    toast(`Detected ${found} runtime${found === 1 ? "" : "s"}; ${healthy} healthy.`, healthy ? "success" : "info");
   } catch (error) {
     toast(`Runtime detection failed: ${String(error)}`, "error");
   }
