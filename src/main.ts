@@ -2,7 +2,13 @@ import "./styles.css";
 import "./strategy.css";
 import { analyzeSessions, parseTranscript } from "./core/import-router";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
-import { checkNativeAppUpdate, detectNativeIntegrations, isTauriRuntime, runtimeLabel } from "./core/tauri";
+import {
+  checkNativeAppUpdate,
+  detectNativeIntegrations,
+  isTauriRuntime,
+  openReleasePage,
+  runtimeLabel,
+} from "./core/tauri";
 import { demoWorkspace, emptyWorkspace } from "./data/demo";
 import { syncFixProposals } from "./fixes/proposals";
 import { syncBaselineRecords } from "./proof/ledger";
@@ -111,11 +117,24 @@ async function refreshApp(show = true): Promise<void> {
       currentVersion: result?.currentVersion ?? "1.0.0",
       latestVersion: result?.version,
       available: Boolean(result),
+      releaseUrl: result?.releaseUrl,
+      publishedAt: result?.publishedAt,
       checkedAt,
       source: result ? "github-release" : "unavailable",
     }});
     if (show) toast(result ? `Version ${result.version} is available.` : "Token Saver is current.", "success");
   } catch (error) { if (show) toast(`Update check failed: ${String(error)}`, "error"); }
+}
+
+async function openAvailableRelease(): Promise<void> {
+  const url = state.appUpdate?.releaseUrl;
+  if (!url) return toast("No trusted release link is available.", "error");
+  try {
+    await openReleasePage(url);
+    toast("Opened the GitHub Release in your system browser.", "success");
+  } catch (error) {
+    toast(`Could not open the release: ${String(error)}`, "error");
+  }
 }
 
 function bind(): void {
@@ -134,6 +153,7 @@ function bind(): void {
   ["#scan-button", "#empty-scan", "#integration-scan"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", () => void detectTools()));
   document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
   document.querySelector("#app-update-check")?.addEventListener("click", () => void refreshApp());
+  document.querySelector("#app-update-open")?.addEventListener("click", () => void openAvailableRelease());
   document.querySelector("#demo-button")?.addEventListener("click", () => commit(demoWorkspace()));
   document.querySelector("#back-to-sessions")?.addEventListener("click", () => { selectedSessionId = undefined; render(); });
   document.querySelector("#export-button")?.addEventListener("click", () => exportWorkspace(state));
