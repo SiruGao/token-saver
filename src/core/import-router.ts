@@ -5,8 +5,11 @@ import type { AgentSession } from "../types";
 export { analyzeSessions };
 
 export function parseTranscript(content: string, source: string): AgentSession {
-  const prepared = isCodexRollout(content, source)
-    ? normalizeCodexRollout(content)
-    : content;
-  return parseGeneric(prepared, source);
+  const codex = isCodexRollout(content, source);
+  const prepared = codex ? normalizeCodexRollout(content) : content;
+  const session = parseGeneric(prepared, source);
+  if (codex && content.includes('"type":"turn_complete"')) {
+    session.status = "success";
+  }
+  return session;
 }
