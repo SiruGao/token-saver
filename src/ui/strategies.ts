@@ -1,3 +1,4 @@
+import { buildStrategyRoutePlan } from "../strategies/policy";
 import { recommendationsForFindings, strategyRegistry } from "../strategies/registry";
 import type { CompressionStrategy, WorkspaceState } from "../types";
 import { dateTime, escapeHtml } from "./format";
@@ -21,28 +22,10 @@ function runtimeLabel(strategy: CompressionStrategy): string {
   return strategy.runtimeVersion ?? "Ready";
 }
 
-function strategyCard(
-  strategy: CompressionStrategy,
-  recommendationCount: number,
-  automatic: boolean,
-): string {
-  const version = strategy.latestVersion
-    ? `Latest ${escapeHtml(strategy.latestVersion)}`
-    : "Version not checked";
-  const runtimeTone = !strategy.runtimeCheckedAt
-    ? "unknown"
-    : !strategy.runtimeDetected
-      ? "missing"
-      : strategy.runtimeHealthy
-        ? "healthy"
-        : "unhealthy";
-  const runtimeTitle = !strategy.runtimeCheckedAt
-    ? "Local engine not checked"
-    : !strategy.runtimeDetected
-      ? "Local engine not installed"
-      : strategy.runtimeHealthy
-        ? "Ready for compatible routes"
-        : "Engine needs review";
+function strategyCard(strategy: CompressionStrategy, recommendationCount: number, automatic: boolean): string {
+  const version = strategy.latestVersion ? `Latest ${escapeHtml(strategy.latestVersion)}` : "Version not checked";
+  const runtimeTone = !strategy.runtimeCheckedAt ? "unknown" : !strategy.runtimeDetected ? "missing" : strategy.runtimeHealthy ? "healthy" : "unhealthy";
+  const runtimeTitle = !strategy.runtimeCheckedAt ? "Local engine not checked" : !strategy.runtimeDetected ? "Local engine not installed" : strategy.runtimeHealthy ? "Ready for compatible routes" : "Engine needs review";
   const selectedLabel = automatic
     ? strategy.enabled ? "Allowed in automatic routing" : "Excluded from automatic routing"
     : strategy.enabled ? "Enabled manually" : "Disabled";
@@ -90,6 +73,14 @@ export function strategiesView(state: WorkspaceState): string {
   const availableStrategies = strategies(state);
   const recommendations = recommendationsForFindings(state.findings, availableStrategies);
   const automatic = state.settings.optimizationMode !== "manual";
+  const plans = buildStrategyRoutePlan(
+    state.findings,
+    availableStrategies,
+    state.integrations,
+    automatic ? "automatic" : "manual",
+  );
+  const autoRoutable = plans.filter((plan) => plan.decision === "automatic").length;
+  const reviewRequired = plans.filter((plan) => plan.decision === "review").length;
   const selected = availableStrategies.filter((strategy) => strategy.enabled).length;
   const readyRuntimes = availableStrategies.filter((strategy) => strategy.runtimeHealthy).length;
   const updates = availableStrategies.filter((strategy) => strategy.state === "update-available").length;
@@ -102,19 +93,13 @@ export function strategiesView(state: WorkspaceState): string {
         <p>Most users can leave Token Saver in Automatic mode. Advanced users can inspect engines, compatibility, versions, risk, and routing decisions here.</p>
       </div>
       <div class="mode-selector">
-        <button class="mode-option ${automatic ? "active" : ""}" data-optimization-mode="automatic">
-          <strong>Automatic</strong>
-          <small>Use compatible low-risk strategies</small>
-        </button>
-        <button class="mode-option ${automatic ? "" : "active"}" data-optimization-mode="manual">
-          <strong>Manual</strong>
-          <small>Control each strategy yourself</small>
-        </button>
+        <button class="mode-option ${automatic ? "active" : ""}" data-optimization-mode="automatic"><strong>Automatic</strong><small>Use compatible low-risk strategies</small></button>
+        <button class="mode-option ${automatic ? "" : "active"}" data-optimization-mode="manual"><strong>Manual</strong><small>Control each strategy yourself</small></button>
       </div>
     </section>
 
     <div class="strategy-summary-grid">
-      <article><span>Recommended matches</span><strong>${recommendations.length}</strong><small>Based on current findings</small></article>
+      <article><span>${automatic ? "Automatic routes" : "Strategy matches"}</span><strong>${automatic ? autoRoutable : recommendations.length}</strong><small>${automatic ? `${reviewRequired} require review` : "Based on current findings"}</small></article>
       <article><span>Selected strategies</span><strong>${selected}</strong><small>${automatic ? "Allowed for routing" : "Enabled manually"}</small></article>
       <article><span>Ready locally</span><strong>${readyRuntimes}</strong><small>Runtime detected</small></article>
       <article><span>Registry updates</span><strong>${updates}</strong><small>${state.lastStrategyCheckAt ? dateTime(state.lastStrategyCheckAt) : "Not checked"}</small></article>
@@ -122,22 +107,22 @@ export function strategiesView(state: WorkspaceState): string {
 
     <article class="panel strategy-recommendations">
       <div class="panel-head">
-        <div><span class="eyebrow">CURRENT RECOMMENDATIONS</span><h2>${automatic ? "What Token Saver would choose" : "Matches available for manual review"}</h2></div>
+        <div><span class="eyebrow">CURRENT RECOMMENDATIONS</span><h2>${automatic ? "What Token Saver can route automatically" : "Matches available for manual review"}</h2></div>
         <div class="strategy-hero-actions"><button class="button ghost" id="strategy-runtime-check">Check local engines</button><button class="button primary" id="strategy-update-button">Refresh registry</button></div>
       </div>
       ${recommendations.length
         ? `<div class="recommendation-list">${recommendations.slice(0, 8).map((item) => {
             const strategy = availableStrategies.find((candidate) => candidate.id === item.strategyId);
-            return `<div><span class="confidence ${item.confidence}">${item.confidence}</span><strong>${escapeHtml(strategy?.name ?? item.strategyId)}</strong><code>${escapeHtml(item.findingType)}</code><p>${escapeHtml(item.reason)}</p></div>`;
+            const plan = plans.find((candidate) => candidate.strategyId === item.strategyId);
+            const label = plan?.decision === "automatic" ? "auto" : plan?.decision === "review" ? "review" : item.confidence;
+            return `<div><span class="confidence ${item.confidence}">${label}</span><strong>${escapeHtml(strategy?.name ?? item.strategyId)}</strong><code>${escapeHtml(item.findingType)}</code><p>${escapeHtml(plan?.reason ?? item.reason)}</p></div>`;
           }).join("")}</div>`
         : `<div class="empty-inline">No recommendation yet. Token Saver will not select an engine without a matching finding.</div>`}
     </article>
 
     <details class="advanced-strategies" ${automatic ? "" : "open"}>
       <summary><div><strong>${automatic ? "Advanced engine controls" : "Manual engine controls"}</strong><small>${automatic ? "Optional: inspect or limit the engines available to smart routing." : "Choose exactly which engines Token Saver may use."}</small></div><span>${availableStrategies.length} engines</span></summary>
-      <div class="strategy-grid">
-        ${availableStrategies.map((strategy) => strategyCard(strategy, recommendations.filter((item) => item.strategyId === strategy.id).length, automatic)).join("")}
-      </div>
+      <div class="strategy-grid">${availableStrategies.map((strategy) => strategyCard(strategy, recommendations.filter((item) => item.strategyId === strategy.id).length, automatic)).join("")}</div>
     </details>
 
     <article class="panel strategy-governance">
