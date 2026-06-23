@@ -28,22 +28,25 @@ export interface ConnectorRuntimeHost {
   toast(message: string, tone?: "success" | "error" | "info"): void;
 }
 
-function mergeEvents(existing: SessionEvent[], incoming: SessionEvent[]): SessionEvent[] {
+export function mergeConnectorEvents(existing: SessionEvent[], incoming: SessionEvent[]): SessionEvent[] {
   const indexed = new Map(existing.map((event) => [event.id, event]));
   for (const event of incoming) indexed.set(event.id, event);
   return [...indexed.values()].sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
 }
 
-function mergeSession(existing: AgentSession | undefined, incoming: AgentSession): AgentSession {
+export function mergeConnectorSession(existing: AgentSession | undefined, incoming: AgentSession): AgentSession {
   if (!existing) return incoming;
-  const events = mergeEvents(existing.events, incoming.events);
+  const events = mergeConnectorEvents(existing.events, incoming.events);
+  const startedAt = Date.parse(existing.startedAt) <= Date.parse(incoming.startedAt)
+    ? existing.startedAt
+    : incoming.startedAt;
   const ending = events.at(-1)?.timestamp ?? incoming.startedAt;
-  const duration = Math.max(0, Date.parse(ending) - Date.parse(existing.startedAt));
+  const duration = Math.max(0, Date.parse(ending) - Date.parse(startedAt));
   return {
     ...existing,
     ...incoming,
     title: incoming.title.startsWith("Claude Code session") ? existing.title : incoming.title,
-    startedAt: Date.parse(existing.startedAt) <= Date.parse(incoming.startedAt) ? existing.startedAt : incoming.startedAt,
+    startedAt,
     durationMinutes: Number.isFinite(duration) ? Math.max(1, Math.round(duration / 60_000)) : incoming.durationMinutes,
     status: incoming.status === "unknown" ? existing.status : incoming.status,
     usage: incoming.usage.input + incoming.usage.output > 0 ? incoming.usage : existing.usage,
@@ -51,9 +54,9 @@ function mergeSession(existing: AgentSession | undefined, incoming: AgentSession
   };
 }
 
-function mergeSessions(existing: AgentSession[], incoming: AgentSession[]): AgentSession[] {
+export function mergeConnectorSessions(existing: AgentSession[], incoming: AgentSession[]): AgentSession[] {
   const indexed = new Map(existing.map((session) => [session.id, session]));
-  for (const session of incoming) indexed.set(session.id, mergeSession(indexed.get(session.id), session));
+  for (const session of incoming) indexed.set(session.id, mergeConnectorSession(indexed.get(session.id), session));
   return [...indexed.values()].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt));
 }
 
@@ -101,19 +104,18 @@ function updateStatus(
   return stateWithStatuses(state, statuses);
 }
 
-function applyImportedSessions(
-  state: WorkspaceState,
-  imported: AgentSession[],
-): WorkspaceState {
+function applyImportedSessions(state: WorkspaceState, imported: AgentSession[]): WorkspaceState {
   if (!imported.length) return state;
-  const sessions = mergeSessions(state.sessions, imported);
+  const sessions = mergeConnectorSessions(state.sessions, imported);
   const findings = analyzeSessions(sessions, state.settings.largeOutputThreshold);
   const proofRecords = syncBaselineRecords(sessions, findings, state.proofRecords);
   const fixProposals = syncFixProposals(findings, mergeStrategyRegistry(state.strategies), state.fixProposals);
   return { ...state, sessions, findings, proofRecords, fixProposals };
 }
 
-function codexSessions(files: Awaited<ReturnType<typeof syncCodexHistory>>): AgentSession[] {
+export function normalizeCodexSessionFiles(
+  files: Awaited<ReturnType<typeof syncCodexHistory>>,
+): AgentSession[] {
   const sessions: AgentSession[] = [];
   for (const file of files) {
     try {
@@ -132,9 +134,9 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
   async function refreshStatuses(show = false): Promise<ConnectorStatus[]> {
     try {
       const inspected = await inspectAgentConnectors();
-      const state = host.getState();
-      const statuses = mergeConnectorStatuses(state.connectorStatuses, inspected);
-      host.commit(stateWithStatuses(state, statuses));
+      const currentState = host.getState();
+      const statuses = mergeConnectorStatuses(currentState.connectorStatuses, inspected);
+      host.commit(stateWithStatuses(currentState, statuses));
       if (show) host.toast("Connector status refreshed.", "success");
       return statuses;
     } catch (error) {
@@ -154,13 +156,14 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
 
     try {
       let imported: AgentSession[] = [];
+      let acknowledgedPaths: string[] = [];
       if (id === "codex") {
-        imported = codexSessions(await syncCodexHistory());
+        imported = normalizeCodexSessionFiles(await syncCodexHistory());
       } else if (id === "claude-code") {
         const files = await readClaudeHookEvents();
         const normalized = normalizeClaudeHookEvents(files);
         imported = normalized.sessions;
-        if (normalized.acceptedPaths.length) await acknowledgeClaudeHookEvents(normalized.acceptedPaths);
+        acknowledgedPaths = normalized.acceptedPaths;
       } else {
         throw new Error("This connector does not have an automatic sync adapter yet.");
       }
@@ -171,11 +174,31 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
         syncing: false,
         lastSyncedAt: now,
         importedSessions: imported.length,
-        pendingEvents: 0,
+        pendingEvents: id === "claude-code" ? acknowledgedPaths.length : 0,
         lastError: undefined,
       });
       next = { ...next, lastConnectorSyncAt: now };
+
+      // Persist normalized sessions before deleting their source event files.
       host.commit(next);
+
+      if (id === "claude-code" && acknowledgedPaths.length) {
+        try {
+          const removed = await acknowledgeClaudeHookEvents(acknowledgedPaths);
+          host.commit(updateStatus(host.getState(), id, {
+            pendingEvents: Math.max(0, acknowledgedPaths.length - removed),
+            lastError: removed === acknowledgedPaths.length
+              ? undefined
+              : `${acknowledgedPaths.length - removed} imported event file(s) could not be acknowledged.`,
+          }));
+        } catch (error) {
+          host.commit(updateStatus(host.getState(), id, {
+            pendingEvents: acknowledgedPaths.length,
+            lastError: `Sessions were imported, but source event cleanup failed: ${String(error)}`,
+          }));
+        }
+      }
+
       if (show) {
         host.toast(imported.length
           ? `Synced ${imported.length} ${id === "codex" ? "Codex" : "Claude Code"} session${imported.length === 1 ? "" : "s"}.`
@@ -209,12 +232,12 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
       if (!approved) return;
       try {
         const enabled = await enableCodexHistoryConnector();
-        const state = host.getState();
-        const statuses = mergeConnectorStatuses(state.connectorStatuses, [
-          ...(state.connectorStatuses ?? []).filter((item) => item.id !== "codex"),
+        const currentState = host.getState();
+        const statuses = mergeConnectorStatuses(currentState.connectorStatuses, [
+          ...(currentState.connectorStatuses ?? []).filter((item) => item.id !== "codex"),
           enabled,
         ]);
-        host.commit(stateWithStatuses(state, statuses));
+        host.commit(stateWithStatuses(currentState, statuses));
         await sync("codex");
       } catch (error) {
         host.toast(`Codex connection failed: ${String(error)}`, "error");
@@ -237,12 +260,12 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
       if (!approved) return;
       try {
         const enabled = await enableClaudeEventConnector();
-        const state = host.getState();
-        const statuses = mergeConnectorStatuses(state.connectorStatuses, [
-          ...(state.connectorStatuses ?? []).filter((item) => item.id !== "claude-code"),
+        const currentState = host.getState();
+        const statuses = mergeConnectorStatuses(currentState.connectorStatuses, [
+          ...(currentState.connectorStatuses ?? []).filter((item) => item.id !== "claude-code"),
           enabled,
         ]);
-        host.commit(stateWithStatuses(state, statuses));
+        host.commit(stateWithStatuses(currentState, statuses));
         host.toast("Claude Code event capture is connected. New hooks are normally picked up automatically.", "success");
         await sync("claude-code", false);
       } catch (error) {
@@ -261,12 +284,12 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
           ? await disableClaudeEventConnector()
           : undefined;
       if (!disabled) throw new Error("This connector cannot be disconnected automatically yet.");
-      const state = host.getState();
-      const statuses = mergeConnectorStatuses(state.connectorStatuses, [
-        ...(state.connectorStatuses ?? []).filter((item) => item.id !== id),
+      const currentState = host.getState();
+      const statuses = mergeConnectorStatuses(currentState.connectorStatuses, [
+        ...(currentState.connectorStatuses ?? []).filter((item) => item.id !== id),
         disabled,
       ]);
-      host.commit(stateWithStatuses(state, statuses));
+      host.commit(stateWithStatuses(currentState, statuses));
       host.toast(`${name} disconnected.`, "success");
     } catch (error) {
       host.toast(`${name} disconnect failed: ${String(error)}`, "error");
