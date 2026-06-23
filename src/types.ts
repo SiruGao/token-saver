@@ -75,6 +75,25 @@ export interface Integration {
   detail: string;
 }
 
+export type ConnectorDataQuality = "official-usage" | "measured-events" | "estimated-only";
+
+export interface ConnectorStatus {
+  id: AgentId;
+  detected: boolean;
+  authorized: boolean;
+  captureEnabled: boolean;
+  mode: string;
+  dataQuality: ConnectorDataQuality;
+  permissionSummary: string;
+  pendingEvents: number;
+  lastEventAt?: string;
+  lastError?: string;
+  detail: string;
+  syncing?: boolean;
+  lastSyncedAt?: string;
+  importedSessions?: number;
+}
+
 export type StrategyMode = "external-cli" | "local-proxy" | "library" | "workspace-tool";
 export type StrategyRisk = "low" | "medium" | "high";
 export type StrategyState = "available" | "installed" | "update-available" | "disabled";
@@ -231,6 +250,7 @@ export interface AppSettings {
   localOnly: boolean;
   telemetry: boolean;
   autoScan: boolean;
+  autoSyncConnectors?: boolean;
   optimizationMode?: OptimizationMode;
   autoCheckStrategyUpdates?: boolean;
   autoCheckAppUpdates?: boolean;
@@ -243,6 +263,7 @@ export interface WorkspaceState {
   sessions: AgentSession[];
   findings: Finding[];
   integrations: Integration[];
+  connectorStatuses?: ConnectorStatus[];
   strategies?: CompressionStrategy[];
   proofRecords?: ProofRecord[];
   proofStorage?: ProofStorageStatus;
@@ -250,6 +271,7 @@ export interface WorkspaceState {
   rtkAdapter?: RtkAdapterStatus;
   settings: AppSettings;
   lastScanAt?: string;
+  lastConnectorSyncAt?: string;
   lastStrategyCheckAt?: string;
   appUpdate?: AppUpdateStatus;
 }
@@ -263,6 +285,12 @@ export interface NativeIntegration {
 }
 
 export interface NativeSessionFile {
+  path: string;
+  modifiedAt: string;
+  content: string;
+}
+
+export interface NativeHookEventFile {
   path: string;
   modifiedAt: string;
   content: string;

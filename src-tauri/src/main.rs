@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent_connectors;
 mod app_updates;
+mod claude_collector;
 mod proof_db;
 mod rtk_adapter;
 mod rtk_installer;
@@ -132,6 +134,16 @@ fn detect_strategy_runtimes() -> Vec<StrategyRuntimeDetection> {
 }
 
 #[tauri::command]
+fn enable_claude_event_connector_portable() -> Result<agent_connectors::ConnectorStatus, String> {
+    let status = agent_connectors::enable_claude_event_connector()?;
+    if let Err(error) = claude_collector::write_portable_collector() {
+        let _ = agent_connectors::disable_claude_event_connector();
+        return Err(error);
+    }
+    Ok(status)
+}
+
+#[tauri::command]
 fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     if !url.starts_with(RELEASE_URL_PREFIX) {
         return Err("Only Token Saver GitHub Release URLs are allowed.".to_string());
@@ -156,6 +168,14 @@ fn main() {
             scan_local_sessions,
             detect_strategy_runtimes,
             open_release_url,
+            agent_connectors::inspect_agent_connectors,
+            agent_connectors::enable_codex_history_connector,
+            agent_connectors::disable_codex_history_connector,
+            agent_connectors::sync_codex_history,
+            enable_claude_event_connector_portable,
+            agent_connectors::disable_claude_event_connector,
+            agent_connectors::read_claude_hook_events,
+            agent_connectors::acknowledge_claude_hook_events,
             rtk_adapter::inspect_rtk_adapter,
             rtk_adapter::preview_rtk_setup,
             rtk_adapter::install_rtk_adapter,

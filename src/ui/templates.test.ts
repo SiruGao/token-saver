@@ -9,6 +9,7 @@ function workspace(appUpdate, overrides = {}) {
     sessions: [],
     findings: [],
     integrations: [],
+    connectorStatuses: [],
     strategies: [],
     proofRecords: [],
     fixProposals: [],
@@ -17,6 +18,7 @@ function workspace(appUpdate, overrides = {}) {
       localOnly: true,
       telemetry: false,
       autoScan: false,
+      autoSyncConnectors: true,
       optimizationMode: "automatic",
       autoCheckStrategyUpdates: true,
       autoCheckAppUpdates: true,
@@ -42,7 +44,7 @@ test("first run presents a primary scan action", () => {
   assert.match(html, /Automatic mode is the default/);
 });
 
-test("detected tools are not described as connected", () => {
+test("detected connector remains disconnected until explicit approval", () => {
   const html = integrationsView(workspace(undefined, {
     integrations: [{
       id: "codex",
@@ -52,10 +54,48 @@ test("detected tools are not described as connected", () => {
       path: "codex-home",
       detail: "Codex installation detected",
     }],
+    connectorStatuses: [{
+      id: "codex",
+      detected: true,
+      authorized: false,
+      captureEnabled: false,
+      mode: "local-history",
+      dataQuality: "official-usage",
+      permissionSummary: "Read Codex rollout history",
+      pendingEvents: 3,
+      detail: "Approve read-only access to local Codex rollout history.",
+    }],
   }));
   assert.match(html, /Detected/);
-  assert.match(html, /One-time connector approval is still required/);
+  assert.match(html, /Connect once/);
+  assert.match(html, /Approve read-only access/);
   assert.doesNotMatch(html, />Connected</);
+});
+
+test("authorized connector exposes sync and disconnect actions", () => {
+  const html = integrationsView(workspace(undefined, {
+    integrations: [{
+      id: "codex",
+      name: "OpenAI Codex",
+      detected: true,
+      connected: true,
+      detail: "Codex history sync enabled",
+    }],
+    connectorStatuses: [{
+      id: "codex",
+      detected: true,
+      authorized: true,
+      captureEnabled: true,
+      mode: "local-history",
+      dataQuality: "official-usage",
+      permissionSummary: "Read Codex rollout history",
+      pendingEvents: 3,
+      detail: "Codex local history sync is enabled.",
+    }],
+  }));
+  assert.match(html, />Connected</);
+  assert.match(html, /Sync now/);
+  assert.match(html, /Disconnect/);
 });
 
 test("settings keep automatic and manual choices", () => {
@@ -63,6 +103,7 @@ test("settings keep automatic and manual choices", () => {
   assert.match(html, /Optimization mode/);
   assert.match(html, /Choose compatible low-risk strategies for me/);
   assert.match(html, /I will control strategy selection/);
+  assert.match(html, /Sync approved connectors on launch/);
 });
 
 test("shows signed install action without a release URL", () => {

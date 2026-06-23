@@ -1,5 +1,7 @@
 import "./styles.css";
 import "./strategy.css";
+import "./ui/connectors.css";
+import { createConnectorRuntime } from "./core/connector-runtime";
 import { analyzeSessions, parseTranscript } from "./core/import-router";
 import {
   disableRtkForClaude,
@@ -50,14 +52,16 @@ const app = appNode;
 const transcriptInput = transcriptNode;
 
 function initialProofStorage(): ProofStorageStatus {
-  if (isTauriRuntime()) return { mode: "initializing", detail: "Opening the local Proof Ledger database.", ready: false };
-  return { mode: "web-preview", detail: "Proof records use browser storage in Web Preview.", ready: true };
+  return isTauriRuntime()
+    ? { mode: "initializing", detail: "Opening the local Proof Ledger database.", ready: false }
+    : { mode: "web-preview", detail: "Proof records use browser storage in Web Preview.", ready: true };
 }
 
 function hydrate(value: WorkspaceState): WorkspaceState {
   const strategies = mergeStrategyRegistry(value.strategies);
   return {
     ...value,
+    connectorStatuses: value.connectorStatuses ?? [],
     strategies,
     proofRecords: value.proofRecords ?? [],
     proofStorage: value.proofStorage ?? initialProofStorage(),
@@ -65,6 +69,7 @@ function hydrate(value: WorkspaceState): WorkspaceState {
     settings: {
       ...value.settings,
       optimizationMode: value.settings.optimizationMode ?? "automatic",
+      autoSyncConnectors: value.settings.autoSyncConnectors ?? true,
       autoCheckAppUpdates: value.settings.autoCheckAppUpdates ?? true,
       autoCheckStrategyUpdates: value.settings.autoCheckStrategyUpdates ?? true,
     },
@@ -167,6 +172,19 @@ function toast(message: string, tone: "success" | "error" | "info" = "info"): vo
   window.setTimeout(() => item.remove(), 3500);
 }
 
+const connectorRuntime = createConnectorRuntime({ getState: () => state, commit, toast });
+
+function mergeImportedSessions(imported: AgentSession[]): void {
+  if (!imported.length) return;
+  const indexed = new Map(state.sessions.map((session) => [session.id, session]));
+  for (const session of imported) indexed.set(session.id, session);
+  const sessions = [...indexed.values()].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt));
+  const findings = analyzeSessions(sessions, state.settings.largeOutputThreshold);
+  const proofRecords = syncBaselineRecords(sessions, findings, state.proofRecords);
+  const fixProposals = syncFixProposals(findings, mergeStrategyRegistry(state.strategies), state.fixProposals);
+  commit({ ...state, sessions, findings, proofRecords, fixProposals });
+}
+
 async function importFiles(files: FileList | File[]): Promise<void> {
   if (proofResetInProgress) return toast("Wait for local data clearing to finish.");
   const imported: AgentSession[] = [];
@@ -174,14 +192,8 @@ async function importFiles(files: FileList | File[]): Promise<void> {
     try { imported.push(parseTranscript(await file.text(), file.name)); }
     catch (error) { toast(`Could not import ${file.name}: ${String(error)}`, "error"); }
   }
-  const indexed = new Map(state.sessions.map((session) => [session.id, session]));
-  for (const session of imported) indexed.set(session.id, session);
-  const sessions = [...indexed.values()].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt));
   if (imported.length) {
-    const findings = analyzeSessions(sessions, state.settings.largeOutputThreshold);
-    const proofRecords = syncBaselineRecords(sessions, findings, state.proofRecords);
-    const fixProposals = syncFixProposals(findings, mergeStrategyRegistry(state.strategies), state.fixProposals);
-    commit({ ...state, sessions, findings, proofRecords, fixProposals });
+    mergeImportedSessions(imported);
     toast(`Imported ${imported.length} session${imported.length === 1 ? "" : "s"} and recorded baselines.`, "success");
   }
 }
@@ -197,11 +209,14 @@ async function detectTools(): Promise<void> {
       return { ...item, detected: match.detected, connected: match.detected ? item.connected : false, path: match.path, detail: match.detail };
     });
     const found = integrations.filter((item) => item.detected).length;
-    if (firstRun && found) activeView = "strategies";
+    if (firstRun && found) activeView = "integrations";
     commit({ ...state, integrations, lastScanAt: new Date().toISOString() });
-    toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Setup remains off until you approve it.`, found ? "success" : "info");
+    await connectorRuntime.refreshStatuses(false);
     await refreshRtkAdapter(false);
-  } catch (error) { toast(`Detection failed: ${String(error)}`, "error"); }
+    toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Access remains off until you approve it.`, found ? "success" : "info");
+  } catch (error) {
+    toast(`Detection failed: ${String(error)}`, "error");
+  }
 }
 
 function mergeRtkStatus(status: RtkAdapterStatus, selected?: boolean): WorkspaceState {
@@ -261,7 +276,7 @@ async function installRtk(): Promise<void> {
     const approved = window.confirm([
       willConfigure ? "Install and enable command-output optimization" : "Install command-output optimization",
       "",
-      "Token Saver will download the official RTK installer. The installer verifies the release checksum before installing the binary.",
+      "Token Saver will download the official RTK release asset and verify its published checksum before installation.",
       willConfigure ? "It will then back up Claude Code settings and register the RTK hook." : "No AI client configuration will be changed.",
       "",
       `Source: ${preview.source}`,
@@ -327,7 +342,9 @@ async function refreshStrategies(show = true): Promise<void> {
     const fixProposals = syncFixProposals(state.findings, strategies, state.fixProposals);
     commit({ ...state, strategies, fixProposals, lastStrategyCheckAt: new Date().toISOString() });
     if (show) toast("Strategy registry refreshed.", "success");
-  } catch (error) { if (show) toast(`Registry refresh failed: ${String(error)}`, "error"); }
+  } catch (error) {
+    if (show) toast(`Registry refresh failed: ${String(error)}`, "error");
+  }
 }
 
 async function refreshStrategyRuntimes(): Promise<void> {
@@ -340,7 +357,9 @@ async function refreshStrategyRuntimes(): Promise<void> {
     const found = detected.filter((item) => item.detected).length;
     const ready = detected.filter((item) => item.healthy).length;
     toast(`Found ${found} local engine${found === 1 ? "" : "s"}; ${ready} ready to use.`, ready ? "success" : "info");
-  } catch (error) { toast(`Engine detection failed: ${String(error)}`, "error"); }
+  } catch (error) {
+    toast(`Engine detection failed: ${String(error)}`, "error");
+  }
 }
 
 async function refreshApp(show = true): Promise<void> {
@@ -362,7 +381,9 @@ async function refreshApp(show = true): Promise<void> {
       },
     });
     if (show) toast(result.available ? `Version ${result.version} is available.` : "Token Saver is current.", "success");
-  } catch (error) { if (show) toast(`Update check failed: ${String(error)}`, "error"); }
+  } catch (error) {
+    if (show) toast(`Update check failed: ${String(error)}`, "error");
+  }
 }
 
 async function applyAvailableUpdate(): Promise<void> {
@@ -377,7 +398,9 @@ async function applyAvailableUpdate(): Promise<void> {
     if (!update.releaseUrl) throw new Error("No trusted release link is available.");
     await openReleasePage(update.releaseUrl);
     toast("Opened the GitHub Release in your system browser.", "success");
-  } catch (error) { toast(`Could not apply the update: ${String(error)}`, "error"); }
+  } catch (error) {
+    toast(`Could not apply the update: ${String(error)}`, "error");
+  }
 }
 
 function loadDemo(): void {
@@ -387,7 +410,10 @@ function loadDemo(): void {
   commit({ ...demo, proofRecords, proofStorage: state.proofStorage });
 }
 
-function updateBooleanSetting(key: "autoCheckAppUpdates" | "autoCheckStrategyUpdates" | "autoScan", value: boolean): void {
+function updateBooleanSetting(
+  key: "autoCheckAppUpdates" | "autoCheckStrategyUpdates" | "autoScan" | "autoSyncConnectors",
+  value: boolean,
+): void {
   commit({ ...state, settings: { ...state.settings, [key]: value } });
 }
 
@@ -435,7 +461,7 @@ async function clearAllData(): Promise<void> {
   selectedSessionId = undefined;
   proofResetInProgress = false;
   render();
-  toast("Local workspace and Proof Ledger cleared.", "success");
+  toast("Local workspace and Proof Ledger cleared. Connector approvals were not changed.", "success");
 }
 
 function bind(): void {
@@ -464,7 +490,7 @@ function bind(): void {
   document.querySelector("#back-to-sessions")?.addEventListener("click", () => { selectedSessionId = undefined; render(); });
   document.querySelector("#export-button")?.addEventListener("click", () => exportWorkspace(state));
   document.querySelector("#clear-button")?.addEventListener("click", () => {
-    if (window.confirm("Remove imported data and the local Proof Ledger?")) void clearAllData();
+    if (window.confirm("Remove imported data and the local Proof Ledger? Connector approvals will remain unchanged.")) void clearAllData();
   });
   document.querySelectorAll<HTMLElement>("[data-optimization-mode]").forEach((item) => item.addEventListener("click", () => {
     const mode = item.dataset.optimizationMode;
@@ -473,15 +499,20 @@ function bind(): void {
   document.querySelector<HTMLInputElement>("#auto-app-updates")?.addEventListener("change", (event) => updateBooleanSetting("autoCheckAppUpdates", (event.currentTarget as HTMLInputElement).checked));
   document.querySelector<HTMLInputElement>("#auto-strategy-updates")?.addEventListener("change", (event) => updateBooleanSetting("autoCheckStrategyUpdates", (event.currentTarget as HTMLInputElement).checked));
   document.querySelector<HTMLInputElement>("#auto-scan")?.addEventListener("change", (event) => updateBooleanSetting("autoScan", (event.currentTarget as HTMLInputElement).checked));
+  document.querySelector<HTMLInputElement>("#auto-sync-connectors")?.addEventListener("change", (event) => updateBooleanSetting("autoSyncConnectors", (event.currentTarget as HTMLInputElement).checked));
   document.querySelector<HTMLInputElement>("#large-output-threshold")?.addEventListener("change", (event) => updateLargeOutputThreshold((event.currentTarget as HTMLInputElement).value));
   document.querySelectorAll<HTMLElement>("[data-strategy-toggle]").forEach((item) => item.onclick = () => {
     const id = item.dataset.strategyToggle;
     if (!id) return;
     commit({ ...state, strategies: mergeStrategyRegistry(state.strategies).map((strategy) => strategy.id === id ? { ...strategy, enabled: !strategy.enabled } : strategy) });
   });
+  connectorRuntime.bind();
 }
 
-function render(): void { app.innerHTML = shell(activeView, currentView(), runtimeLabel()); bind(); }
+function render(): void {
+  app.innerHTML = shell(activeView, currentView(), runtimeLabel());
+  bind();
+}
 
 transcriptInput.onchange = async () => {
   if (transcriptInput.files) await importFiles(transcriptInput.files);
@@ -493,9 +524,14 @@ window.ondrop = async (event) => {
   if (event.dataTransfer?.files.length) await importFiles(event.dataTransfer.files);
 };
 
+async function startDesktopFeatures(): Promise<void> {
+  await connectorRuntime.start();
+  await refreshRtkAdapter(false);
+  if (state.settings.autoScan && !state.lastScanAt) await detectTools();
+}
+
 render();
 void initializeProofPersistence();
-if (isTauriRuntime()) void refreshRtkAdapter(false);
-if (state.settings.autoScan && isTauriRuntime() && !state.lastScanAt) void detectTools();
+if (isTauriRuntime()) void startDesktopFeatures();
 if (state.settings.autoCheckStrategyUpdates !== false && !state.lastStrategyCheckAt) void refreshStrategies(false);
 if (state.settings.autoCheckAppUpdates !== false && !state.appUpdate?.checkedAt) void refreshApp(false);

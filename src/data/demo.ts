@@ -1,13 +1,8 @@
 import { analyzeSessions } from "../core/analyzer";
 import { createId, stableHash } from "../core/hash";
-import type { AgentSession, Integration, SessionEvent, WorkspaceState } from "../types";
+import type { AgentSession, ConnectorStatus, Integration, SessionEvent, WorkspaceState } from "../types";
 
-function event(
-  index: number,
-  type: string,
-  content: string,
-  options: Partial<SessionEvent> = {},
-): SessionEvent {
+function event(index: number, type: string, content: string, options: Partial<SessionEvent> = {}): SessionEvent {
   return {
     id: `demo_evt_${index}`,
     timestamp: new Date(Date.now() - (28 - index) * 60_000).toISOString(),
@@ -43,14 +38,7 @@ const demoSession: AgentSession = {
   startedAt: new Date(Date.now() - 38 * 60_000).toISOString(),
   durationMinutes: 38,
   status: "success",
-  usage: {
-    input: 184_200,
-    output: 8_420,
-    cacheRead: 42_000,
-    cacheWrite: 8_500,
-    reasoning: 3_200,
-    estimatedCostUsd: 2.71,
-  },
+  usage: { input: 184_200, output: 8_420, cacheRead: 42_000, cacheWrite: 8_500, reasoning: 3_200, estimatedCostUsd: 2.71 },
   events: demoEvents,
 };
 
@@ -79,12 +67,43 @@ const otherSessions: AgentSession[] = [
 ];
 
 export const defaultIntegrations: Integration[] = [
-  { id: "claude-code", name: "Claude Code", detected: false, connected: false, detail: "Transcript analysis and hook adapter" },
-  { id: "codex", name: "OpenAI Codex", detected: false, connected: false, detail: "Session analysis and app-server adapter" },
-  { id: "openclaw", name: "OpenClaw", detected: false, connected: false, detail: "Skill and runtime integration" },
-  { id: "hermes", name: "Hermes Agent", detected: false, connected: false, detail: "Session and plugin adapter" },
-  { id: "opencode", name: "OpenCode", detected: false, connected: false, detail: "Usage and session adapter" },
-  { id: "cursor", name: "Cursor", detected: false, connected: false, detail: "Extension and local connector" },
+  { id: "claude-code", name: "Claude Code", detected: false, connected: false, detail: "Reversible lifecycle hook connector" },
+  { id: "codex", name: "OpenAI Codex", detected: false, connected: false, detail: "Read-only local rollout history connector" },
+  { id: "openclaw", name: "OpenClaw", detected: false, connected: false, detail: "Skill and runtime integration planned" },
+  { id: "hermes", name: "Hermes Agent", detected: false, connected: false, detail: "Session and plugin adapter planned" },
+  { id: "opencode", name: "OpenCode", detected: false, connected: false, detail: "Usage and session adapter planned" },
+  { id: "cursor", name: "Cursor", detected: false, connected: false, detail: "Extension and local connector planned" },
+];
+
+const demoConnectors: ConnectorStatus[] = [
+  {
+    id: "claude-code",
+    detected: true,
+    authorized: true,
+    captureEnabled: true,
+    mode: "lifecycle-hooks",
+    dataQuality: "measured-events",
+    permissionSummary: "Demo lifecycle and tool events",
+    pendingEvents: 0,
+    lastEventAt: new Date().toISOString(),
+    detail: "Claude Code lifecycle event capture is active.",
+    lastSyncedAt: new Date().toISOString(),
+    importedSessions: 1,
+  },
+  {
+    id: "codex",
+    detected: true,
+    authorized: true,
+    captureEnabled: true,
+    mode: "local-history",
+    dataQuality: "official-usage",
+    permissionSummary: "Demo read-only Codex rollout history",
+    pendingEvents: 0,
+    lastEventAt: new Date().toISOString(),
+    detail: "Codex local history sync is active.",
+    lastSyncedAt: new Date().toISOString(),
+    importedSessions: 1,
+  },
 ];
 
 export function demoWorkspace(): WorkspaceState {
@@ -99,11 +118,13 @@ export function demoWorkspace(): WorkspaceState {
       connected: index < 2,
       path: index < 3 ? `~/.${item.id}` : undefined,
     })),
+    connectorStatuses: demoConnectors,
     settings: {
       theme: "light",
       localOnly: true,
       telemetry: false,
       autoScan: true,
+      autoSyncConnectors: true,
       optimizationMode: "automatic",
       autoCheckStrategyUpdates: true,
       autoCheckAppUpdates: true,
@@ -111,6 +132,7 @@ export function demoWorkspace(): WorkspaceState {
       repeatedReadWindowMinutes: 30,
     },
     lastScanAt: new Date().toISOString(),
+    lastConnectorSyncAt: new Date().toISOString(),
   };
 }
 
@@ -120,11 +142,13 @@ export function emptyWorkspace(): WorkspaceState {
     sessions: [],
     findings: [],
     integrations: defaultIntegrations,
+    connectorStatuses: [],
     settings: {
       theme: "light",
       localOnly: true,
       telemetry: false,
       autoScan: true,
+      autoSyncConnectors: true,
       optimizationMode: "automatic",
       autoCheckStrategyUpdates: true,
       autoCheckAppUpdates: true,
