@@ -1,103 +1,134 @@
 # Token Saver UI Architecture
 
-## Goal
+## Product goal
 
-The interface must make a complex local control system feel automatic, calm, and trustworthy. It should never require ordinary users to understand MCP, adapters, context windows, tool schemas, or routing engines.
+Token Saver must make several different token-optimization engines feel like one simple product.
 
-## Primary journey
+The user should not need to understand hooks, proxies, MCP servers, adapters, runtime commands, compatibility matrices, or engine-specific configuration. Those details remain available in Strategy Hub for advanced users, but they are not part of the default path.
+
+## User-facing loop
 
 ```text
-Connect → Protect → Prove
+Scan once → Optimize quietly → Verify savings
 ```
 
-### Connect
+The internal loop remains:
 
-- discover supported AI tools automatically;
-- show whether a connector is detected, authorized, healthy, and receiving events;
-- require one explicit authorization per tool where platform security requires it;
-- keep manual file import as a compatibility path only.
+```text
+Discover clients → Detect waste → Match strategy → Apply policy → Measure outcome
+```
 
-### Protect
+## Two-layer experience
 
-- show one top-level state: protected, attention needed, or not connected;
-- group findings into repeated work, context overload, tool configuration, and execution drift;
-- distinguish safe automatic fixes from changes that need review;
-- preserve preview, backup, apply, and undo as separate gates.
+### Default layer: Automatic mode
 
-### Prove
+Designed for ordinary users.
 
-- show outcomes since installation;
-- distinguish Verified, Measured locally, and Estimated values;
-- prioritize cost per successful task, repeated work avoided, task latency, and task success;
-- never label potential savings as completed savings.
+- scan supported AI clients;
+- present one recommended setup;
+- prefer compatible low-risk strategies;
+- ask for approval only when a connector or configuration change is required;
+- keep optimizations running inside the user's existing workflow;
+- summarize verified and estimated savings clearly;
+- avoid exposing engine-specific configuration unless requested.
+
+### Advanced layer: Strategy Hub
+
+Designed for developers and power users.
+
+- switch between Automatic and Manual modes;
+- inspect each optimization engine;
+- check installed runtime and version;
+- inspect compatibility, capabilities, risk, and matching findings;
+- include or exclude engines from automatic routing;
+- manually enable strategies;
+- review installation commands and third-party ownership;
+- compare results through the shared Proof Ledger.
+
+Strategy Hub is not removed or simplified into a generic settings page. It is the advanced control surface behind the one-click experience.
 
 ## Navigation
 
-| Route | User label | Purpose |
+| Route | Label | Purpose |
 | --- | --- | --- |
-| dashboard | Overview | Current protection state and results |
-| doctor | Checkup | Problems, evidence, and impact |
-| strategies | Fixes | Safe fixes and advanced strategy routing |
-| proof | Results | Baselines, verified outcomes, and provenance |
-| sessions | Activity | Observed sessions and event history |
-| integrations | Tools | Connectors, permissions, and health |
-| settings | Settings | Updates, privacy, analysis, and advanced controls |
+| dashboard | Overview | Verified savings, potential savings, current mode, and setup summary |
+| doctor | Opportunities | Waste patterns, estimated impact, evidence, and strategy matches |
+| strategies | Strategy Hub | Automatic routing plus advanced engine controls |
+| proof | Proof | Comparable outcomes, provenance, and verified savings |
+| sessions | Sessions | Locally observed session history |
+| integrations | Integrations | AI client detection, connector approval, and disconnect controls |
+| settings | Settings | Defaults, updates, privacy, and analysis thresholds |
 
-## Evidence badges
+## First-run flow
 
-- `Verified` — official usage or comparable before/after outcome.
-- `Measured locally` — directly counted local events.
-- `Estimated` — modelled token or cost values.
+The first screen contains one primary action:
 
-Badges must appear adjacent to the metric, not hidden in help text.
+> Scan for AI tools
 
-## Empty state
+The setup flow should become:
 
-Headline:
+```text
+1. Scan existing clients
+2. Show one recommended setup
+3. Explain requested permissions and changes
+4. User approves once
+5. Token Saver completes client-specific setup
+6. User returns to normal work
+```
 
-> Make your AI tools waste less.
+Manual data import remains a secondary compatibility path.
 
-Description:
+## Overview hierarchy
 
-> Token Saver checks the AI tools you already use, finds repeated work and hidden context waste, and keeps every change local and reversible.
+The overview answers:
 
-Primary action:
+1. How many tokens have been verified as saved?
+2. What additional reduction opportunity exists?
+3. Which strategies are selected and ready?
+4. Which AI clients are connected?
+5. What is the next useful action?
 
-> Check my AI tools
+Primary metrics:
 
-Secondary action:
+- Verified saved
+- Potential savings
+- Verified reduction rate
+- Strategies selected
 
-> See sample results
+Secondary information:
 
-## Connected overview
+- savings opportunity by source;
+- connected and detected clients;
+- selected and ready engines;
+- next recommended opportunity.
 
-Top status:
+## Evidence classes
 
-- `Protection is on`
-- `3 opportunities need attention`
-- `Connect your first AI tool`
+- **Verified** — a comparable before/after outcome with usage and task result.
+- **Measured locally** — counts directly observed by Token Saver.
+- **Estimated** — modelled opportunity when direct usage or a comparable result is unavailable.
 
-The overview must answer:
+The UI must never present potential savings as completed savings.
 
-1. How many tools are connected?
-2. What has Token Saver observed?
-3. What has been verified?
-4. What should the user do next?
+## Less-is-more rules
 
-## Information priority
+- one primary action per screen;
+- hide engine installation details in expandable sections;
+- default to Automatic mode;
+- keep advanced controls inside Strategy Hub;
+- use plain language before technical labels;
+- show recommendations before configuration;
+- do not ask users to repeat configuration already known from detection;
+- preserve backup, rollback, and disconnect controls without making them the visual focus;
+- use a light, quiet, high-contrast interface;
+- use charts and status colors only when they communicate measurable value.
 
-1. Protection state
-2. Action requiring attention
-3. Verified outcomes
-4. Measured local evidence
-5. Estimated opportunities
-6. Technical details
+## Visual direction
 
-## Visual rules
-
-- no decorative gradients or generic AI glow;
-- use Obsidian surfaces and restrained Clear Blue accents;
-- reserve Measured Green for completed or verified improvement;
-- use thin borders, generous spacing, and compact data typography;
-- use a non-letter control-node brand mark;
-- display original state as a faint reversible trace where fixes are visualized.
+- light neutral canvas;
+- white surfaces;
+- graphite text;
+- Clear Blue for primary actions and routing state;
+- Measured Green only for verified savings and completed actions;
+- compact mono typography for data;
+- no generic AI glow, coins, robots, shields, or decorative gradients.
