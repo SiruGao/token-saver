@@ -2,6 +2,7 @@ import { buildStrategyRoutePlan } from "../strategies/policy";
 import { recommendationsForFindings, strategyRegistry } from "../strategies/registry";
 import type { CompressionStrategy, RtkAdapterStatus, WorkspaceState } from "../types";
 import { compactNumber, dateTime, escapeHtml, percent } from "./format";
+import { toolResultIsolationCard } from "./tool-result-isolation";
 import "./runtime.css";
 
 function strategies(state: WorkspaceState): CompressionStrategy[] {
@@ -124,7 +125,8 @@ export function strategiesView(state: WorkspaceState): string {
   const autoRoutable = plans.filter((plan) => plan.decision === "automatic").length;
   const reviewRequired = plans.filter((plan) => plan.decision === "review").length;
   const selected = availableStrategies.filter((strategy) => strategy.enabled).length;
-  const readyRuntimes = availableStrategies.filter((strategy) => strategy.runtimeHealthy).length;
+  const builtInReady = state.toolResultIsolation?.enabled ? 1 : 0;
+  const readyRuntimes = availableStrategies.filter((strategy) => strategy.runtimeHealthy).length + builtInReady;
   const updates = availableStrategies.filter((strategy) => strategy.state === "update-available").length;
 
   return `
@@ -140,12 +142,13 @@ export function strategiesView(state: WorkspaceState): string {
       </div>
     </section>
 
+    ${toolResultIsolationCard(state.toolResultIsolation)}
     ${rtkSetupCard(state.rtkAdapter)}
 
     <div class="strategy-summary-grid">
-      <article><span>${automatic ? "Automatic routes" : "Strategy matches"}</span><strong>${automatic ? autoRoutable : recommendations.length}</strong><small>${automatic ? `${reviewRequired} require review` : "Based on current findings"}</small></article>
-      <article><span>Selected strategies</span><strong>${selected}</strong><small>${automatic ? "Allowed for routing" : "Enabled manually"}</small></article>
-      <article><span>Ready locally</span><strong>${readyRuntimes}</strong><small>Runtime detected</small></article>
+      <article><span>${automatic ? "Automatic routes" : "Strategy matches"}</span><strong>${automatic ? autoRoutable + builtInReady : recommendations.length}</strong><small>${automatic ? `${reviewRequired} require review` : "Based on current findings"}</small></article>
+      <article><span>Selected strategies</span><strong>${selected + builtInReady}</strong><small>${automatic ? "Allowed for routing" : "Enabled manually"}</small></article>
+      <article><span>Ready locally</span><strong>${readyRuntimes}</strong><small>Built-in and external engines</small></article>
       <article><span>Registry updates</span><strong>${updates}</strong><small>${state.lastStrategyCheckAt ? dateTime(state.lastStrategyCheckAt) : "Not checked"}</small></article>
     </div>
 
@@ -161,17 +164,17 @@ export function strategiesView(state: WorkspaceState): string {
             const label = plan?.decision === "automatic" ? "auto" : plan?.decision === "review" ? "review" : item.confidence;
             return `<div><span class="confidence ${item.confidence}">${label}</span><strong>${escapeHtml(strategy?.name ?? item.strategyId)}</strong><code>${escapeHtml(item.findingType)}</code><p>${escapeHtml(plan?.reason ?? item.reason)}</p></div>`;
           }).join("")}</div>`
-        : `<div class="empty-inline">No recommendation yet. Token Saver will not select an engine without a matching finding.</div>`}
+        : `<div class="empty-inline">No recommendation yet. Token Saver will not select an external engine without a matching finding. Built-in low-risk isolation can still run on oversized results.</div>`}
     </article>
 
     <details class="advanced-strategies" ${automatic ? "" : "open"}>
-      <summary><div><strong>${automatic ? "Advanced engine controls" : "Manual engine controls"}</strong><small>${automatic ? "Optional: inspect or limit the engines available to smart routing." : "Choose exactly which engines Token Saver may use."}</small></div><span>${availableStrategies.length} engines</span></summary>
+      <summary><div><strong>${automatic ? "Advanced engine controls" : "Manual engine controls"}</strong><small>${automatic ? "Optional: inspect or limit the engines available to smart routing." : "Choose exactly which engines Token Saver may use."}</small></div><span>${availableStrategies.length} external engines</span></summary>
       <div class="strategy-grid">${availableStrategies.map((strategy) => strategyCard(strategy, recommendations.filter((item) => item.strategyId === strategy.id).length, automatic)).join("")}</div>
     </details>
 
     <article class="panel strategy-governance">
-      <strong>Token Saver orchestrates external engines without hiding ownership.</strong>
-      <p>Each engine keeps its own license, release channel, and security boundary. Token Saver adds compatibility checks, user approval, routing policy, rollback context, and a shared Proof Ledger.</p>
+      <strong>Built-in strategies and external engines remain distinguishable.</strong>
+      <p>Token Saver Local provides reversible tool-result isolation. Third-party engines keep their own license, release channel, and security boundary. All strategies share compatibility checks, evidence labels, rollback context, and the Proof Ledger.</p>
       <small>${state.lastStrategyCheckAt ? `Last registry check: ${dateTime(state.lastStrategyCheckAt)}` : "Registry has not been checked in this workspace."}</small>
     </article>`;
 }
