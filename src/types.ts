@@ -174,6 +174,29 @@ export interface RtkSetupPreview {
   source: string;
 }
 
+export interface IsolationStats {
+  isolatedResults: number;
+  originalChars: number;
+  deliveredChars: number;
+  estimatedSavedTokens: number;
+  lastIsolatedAt?: string;
+}
+
+export interface ToolResultIsolationStatus {
+  enabled: boolean;
+  configured: boolean;
+  strategyId: string;
+  strategyVersion: string;
+  thresholdChars: number;
+  matcher: string;
+  reversible: boolean;
+  detail: string;
+  stats: IsolationStats;
+  busy?: boolean;
+  error?: string;
+  checkedAt?: string;
+}
+
 export interface AppUpdateStatus {
   configured?: boolean;
   currentVersion: string;
@@ -269,6 +292,7 @@ export interface WorkspaceState {
   proofStorage?: ProofStorageStatus;
   fixProposals?: FixProposal[];
   rtkAdapter?: RtkAdapterStatus;
+  toolResultIsolation?: ToolResultIsolationStatus;
   settings: AppSettings;
   lastScanAt?: string;
   lastConnectorSyncAt?: string;
