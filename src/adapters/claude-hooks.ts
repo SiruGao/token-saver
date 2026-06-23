@@ -3,6 +3,11 @@ import type { AgentSession, NativeHookEventFile, SessionEvent } from "../types";
 
 type JsonRecord = Record<string, unknown>;
 
+export interface ClaudeHookNormalization {
+  sessions: AgentSession[];
+  acceptedPaths: string[];
+}
+
 function record(value: unknown): JsonRecord {
   return typeof value === "object" && value !== null ? value as JsonRecord : {};
 }
@@ -74,22 +79,25 @@ function normalizeEvent(file: NativeHookEventFile, payload: JsonRecord): Session
   };
 }
 
-export function normalizeClaudeHookEvents(files: NativeHookEventFile[]): AgentSession[] {
+export function normalizeClaudeHookEvents(files: NativeHookEventFile[]): ClaudeHookNormalization {
   const grouped = new Map<string, Array<{ file: NativeHookEventFile; payload: JsonRecord }>>();
+  const acceptedPaths: string[] = [];
   for (const file of files) {
     try {
       const payload = record(JSON.parse(file.content));
       const sessionId = text(payload.session_id);
-      if (!sessionId) continue;
+      const eventName = text(payload.hook_event_name);
+      if (!sessionId || !eventName) continue;
       const items = grouped.get(sessionId) ?? [];
       items.push({ file, payload });
       grouped.set(sessionId, items);
+      acceptedPaths.push(file.path);
     } catch {
-      // A malformed local hook event remains on disk and is not acknowledged.
+      // A malformed local hook event remains on disk for diagnostics.
     }
   }
 
-  return [...grouped.entries()].map(([sessionId, items]) => {
+  const sessions = [...grouped.entries()].map(([sessionId, items]) => {
     const events = items
       .map(({ file, payload }) => normalizeEvent(file, payload))
       .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
@@ -97,6 +105,7 @@ export function normalizeClaudeHookEvents(files: NativeHookEventFile[]): AgentSe
     const project = text(firstPayload.cwd, "Local project");
     const firstPrompt = events.find((event) => event.role === "user" && event.content.trim());
     const ended = events.some((event) => event.type === "sessionend" || event.type === "stop");
+    const failed = events.some((event) => event.type === "posttoolusefailure");
     const startedAt = events[0]?.timestamp ?? new Date().toISOString();
     const finishedAt = events.at(-1)?.timestamp ?? startedAt;
     const durationMs = Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt));
@@ -111,7 +120,7 @@ export function normalizeClaudeHookEvents(files: NativeHookEventFile[]): AgentSe
       source: `Claude Code hooks/${sessionId}`,
       startedAt,
       durationMinutes: Number.isFinite(durationMs) ? Math.max(1, Math.round(durationMs / 60_000)) : 1,
-      status: ended ? "success" : "unknown",
+      status: failed ? "failed" : ended ? "success" : "unknown",
       usage: {
         input: 0,
         output: 0,
@@ -123,4 +132,6 @@ export function normalizeClaudeHookEvents(files: NativeHookEventFile[]): AgentSe
       events,
     } satisfies AgentSession;
   });
+
+  return { sessions, acceptedPaths };
 }
