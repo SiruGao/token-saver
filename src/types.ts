@@ -10,6 +10,7 @@ export type AgentId =
 export type SessionStatus = "success" | "failed" | "unknown";
 export type FindingSeverity = "low" | "medium" | "high";
 export type ViewId = "dashboard" | "doctor" | "strategies" | "proof" | "sessions" | "integrations" | "settings";
+export type OptimizationMode = "automatic" | "manual";
 
 export interface TokenUsage {
   input: number;
@@ -195,6 +196,7 @@ export interface AppSettings {
   localOnly: boolean;
   telemetry: boolean;
   autoScan: boolean;
+  optimizationMode?: OptimizationMode;
   autoCheckStrategyUpdates?: boolean;
   autoCheckAppUpdates?: boolean;
   largeOutputThreshold: number;
