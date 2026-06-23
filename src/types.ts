@@ -120,9 +120,11 @@ export interface StrategyRecommendation {
 }
 
 export interface AppUpdateStatus {
+  configured: boolean;
   currentVersion: string;
   latestVersion?: string;
   available: boolean;
+  installing?: boolean;
   releaseUrl?: string;
   publishedAt?: string;
   notes?: string;
