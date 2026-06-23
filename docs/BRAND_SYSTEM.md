@@ -2,113 +2,120 @@
 
 ## Brand essence
 
-**Quiet control for better AI work.**
+**Invisible optimization. Visible savings.**
 
-Token Saver is a local efficiency control layer for AI tools. It automatically discovers hidden waste, recommends safe and reversible fixes, and proves whether successful work became cheaper, faster, and more stable.
+Token Saver is a local compatibility and orchestration layer for token-saving tools. It detects the AI coding clients a user already has, matches them with compatible optimization engines, keeps those engines out of the way during normal work, and presents an accurate record of what changed.
 
 ## Positioning
 
-> Install once. Make every AI tool waste less.
+> Connect once. Reduce token usage across every supported AI coding tool.
 
-Token Saver is not a prompt compressor, token counter, MCP marketplace, chatbot, or developer toolbox. It is a system-level control layer that works across agents, tools, MCP servers, local context, and task execution.
+Token Saver is not a single prompt compressor, token counter, MCP marketplace, chatbot, or replacement model. It is the layer that makes multiple token-optimization approaches work together across Claude Code, Codex, Cursor, OpenCode, Hermes, and other supported clients.
 
 ## Product promise
 
-1. **Automatic discovery** — users should not repeatedly import conversations or understand internal architecture.
-2. **Safe optimization** — every change is previewable, explainable, backed up, reversible, and local-first.
-3. **Verifiable results** — Token Saver distinguishes observed waste, potential savings, and verified savings.
+1. **Broad compatibility** — users should be able to connect mainstream optimization engines without manually learning their installation and configuration differences.
+2. **Invisible improvement** — once enabled, optimizations should work inside the user's existing workflow with minimal interruption.
+3. **Accurate visualization** — the application must clearly separate observed usage, estimated opportunity, and verified savings.
+4. **Safe control** — every external engine remains identifiable, reviewable, disableable, and reversible.
 
 ## Product principles
 
-- Hide complexity. Show evidence.
-- Default correct.
-- Run quietly.
-- Always reversible.
-- Measure successful work, not empty savings.
-- Never claim verified savings without a comparable outcome.
+- Integrate instead of reinventing every compression method.
+- Hide setup complexity, not evidence.
+- Prefer low-risk optimizations before semantic compression.
+- Never label potential savings as completed savings.
+- Show which engine produced which result.
+- Make every optimization disableable and reversible.
+- Keep raw conversation data local by default.
 
 ## Experience model
 
 The internal product loop is:
 
 ```text
-Discovery → Doctor → Policy → Safe Fix → Proof
+Discover clients → Detect waste → Match engine → Apply policy → Measure result
 ```
 
 The user-facing loop is:
 
 ```text
-Connect → Protect → Prove
+Connect → Optimize → Verify
 ```
 
-Primary navigation should use plain language:
+Primary navigation:
 
 ```text
-Overview · Checkup · Fixes · Results · Activity · Tools · Settings
+Overview · Opportunities · Engines · Proof · Sessions · Integrations · Settings
 ```
 
 ## Voice
 
-Token Saver speaks like a reliable system diagnostic tool.
+Token Saver speaks like a precise optimization utility.
 
 Use:
 
-- We found
-- We checked
-- This may cause
-- Safe to apply
-- Needs review
-- Can be undone
-- Based on completed tasks
+- Potential reduction
+- Verified savings
+- Measured locally
+- Optimized by RTK
+- Compatible with Codex
+- Waiting for a comparable run
+- Can be disabled at any time
 
 Avoid:
 
+- Your AI tool is unhealthy
+- Protection is on
 - AI-powered magic
 - Revolutionary optimization
-- 10x productivity
+- Guaranteed savings
 - Never waste tokens again
-- One-click perfection
+- 10x productivity
 
 ## Visual concept
 
-### Quiet Control
+### Clear Instrumentation
 
-The interface should feel like an operating-system utility that is always present but rarely demands attention.
+The interface should feel like a precise desktop utility: light, quiet, legible, and data-first. It should make token flow and optimization results easy to inspect without looking like a dense enterprise monitoring console.
 
-### Controlled Flow
+### Invisible Runtime, Visible Evidence
 
-The visual language should express:
+The product works quietly in the background, but the interface shows:
 
-- repetition becoming singular;
-- noise becoming order;
-- drift returning to a stable path;
-- hidden waste becoming visible;
-- original state remaining recoverable.
+- where token usage came from;
+- which optimization engine acted;
+- how much reduction is estimated;
+- how much reduction has been verified;
+- whether task outcome remained successful.
 
-Avoid token coins, money, shields, funnels, robots, sparkles, and compression metaphors.
+Avoid token coins, money graphics, shields, robots, sparkles, and generic AI gradients.
 
 ## Color system
 
 ```text
-Obsidian          #111315
-Soft Mineral      #F2F1ED
-Clear Blue        #5E7CFF
-Mist              #A8B4C7
-Measured Green    #65B891
-Warning           #D79B48
-Risk              #D96565
+Canvas            #F6F7F9
+Surface           #FFFFFF
+Soft Surface      #F0F3F7
+Graphite          #18202A
+Secondary Text    #667085
+Clear Blue        #4F6DF5
+Measured Green    #2F9E70
+Warning           #C9872B
+Risk              #D95C5C
+Divider           #E3E7ED
 ```
 
 Usage ratio:
 
 ```text
-70% neutral background
-20% graphite and text
-7% Clear Blue
-3% status colors
+72% light neutral background
+20% white surfaces and graphite text
+6% Clear Blue
+2% status colors
 ```
 
-Measured Green is reserved for proven improvements and completed safe actions. It must not be used as a generic accent.
+Measured Green is reserved for verified savings and completed low-risk actions. Clear Blue is used for navigation, active engines, and primary actions.
 
 ## Typography
 
@@ -132,51 +139,54 @@ HarmonyOS Sans SC, Source Han Sans SC
 
 ## Evidence language
 
-Every metric must expose its confidence class:
+Every metric must expose its evidence class:
 
-- **Verified** — direct client or API usage and comparable outcome data.
-- **Measured locally** — event counts, repeated reads, tool calls, duration, and hashes measured by Token Saver.
-- **Estimated** — token and cost estimates when official usage is unavailable.
+- **Verified** — direct usage plus a comparable before/after outcome.
+- **Measured locally** — event counts, tool calls, repeated reads, durations, and hashes counted by Token Saver.
+- **Estimated** — potential tokens or cost inferred when official usage is unavailable.
 
 The interface must distinguish:
 
 ```text
-Observed waste
+Observed usage
 Potential savings
 Verified savings
 ```
 
 ## Homepage hierarchy
 
-The homepage answers three questions:
+The homepage answers four questions:
 
-1. Is Token Saver connected?
-2. Is protection running?
-3. What has Token Saver measurably improved?
+1. How many tokens have been verified as saved?
+2. What additional reduction opportunity exists?
+3. Which optimization engines are enabled?
+4. Which AI tools are connected?
 
 First-run headline:
 
-> Make your AI tools waste less.
+> Reduce token usage across the AI tools you already use.
 
-First-run action:
+First-run description:
 
-> Check my AI tools
+> Token Saver connects compatible optimization engines, applies them quietly, and measures the result.
 
-Connected state:
+Primary action:
 
-> Protection is on
+> Scan for AI tools
 
 Primary result language:
 
-- repeated work reduced;
-- redundant tool calls avoided;
-- successful-task latency improved;
-- cost per successful task reduced;
-- task success maintained.
+- verified tokens saved;
+- reduction rate;
+- estimated cost avoided;
+- active optimization engines;
+- tool output reduced;
+- repeated reads avoided;
+- task success preserved.
 
 ## Canonical slogans
 
-- **Make every AI tool waste less.**
-- **Less repetition. Less drift. Less waste.**
-- **Install once. Improve every run.**
-- **Optimization you can verify.**
+- **Invisible optimization. Visible savings.**
+- **Connect once. Optimize every supported AI tool.**
+- **Use the best token-saving engines without changing your workflow.**
+- **Measured savings, not compression claims.**
