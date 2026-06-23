@@ -1,5 +1,7 @@
 import { efficiencyScore } from "../core/analyzer";
+import type { CodexSelectionPreview } from "../core/codex-selection";
 import type { AgentSession, Finding, Integration, ViewId, WorkspaceState } from "../types";
+import { codexSelectionView } from "./codex-selection";
 import { compactNumber, currency, dateTime, escapeHtml, percent } from "./format";
 
 export const NAV_ITEMS: Array<{ id: ViewId; label: string; icon: string }> = [
@@ -59,8 +61,12 @@ function integration(item: Integration): string {
   return `<article class="integration-card"><div class="integration-logo">${item.name.slice(0, 2).toUpperCase()}</div><div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.detail)}</p></div><div class="integration-state ${item.detected ? "detected" : ""}"><span></span>${item.detected ? "Detected" : "Not detected"}</div></article>`;
 }
 
-export function integrationsView(state: WorkspaceState): string {
-  return `<div class="integration-hero"><div><span class="eyebrow">READ-ONLY DETECTION</span><h2>${state.integrations.filter((item) => item.detected).length} tools detected</h2><p>Token Saver checks directory existence only.</p></div><button class="button primary" id="integration-scan">Rescan</button></div><div class="integration-grid">${state.integrations.map(integration).join("")}</div>`;
+export function integrationsView(
+  state: WorkspaceState,
+  codexPreview?: CodexSelectionPreview,
+  codexBusy = false,
+): string {
+  return `<div class="integration-hero"><div><span class="eyebrow">READ-ONLY DETECTION</span><h2>${state.integrations.filter((item) => item.detected).length} tools detected</h2><p>Installation detection checks directory existence only. Conversation content requires explicit selection and confirmation.</p></div><button class="button primary" id="integration-scan">Rescan</button></div>${codexSelectionView(codexPreview, codexBusy)}<div class="integration-grid">${state.integrations.map(integration).join("")}</div>`;
 }
 
 function toggle(id: string, checked: boolean): string {
@@ -69,11 +75,11 @@ function toggle(id: string, checked: boolean): string {
 
 export function settingsView(state: WorkspaceState): string {
   const update = state.appUpdate;
-  const releaseAction = update?.available && update.releaseUrl
-    ? `<button class="button primary" id="app-update-open">Download and install</button>`
+  const releaseAction = update?.available
+    ? `<button class="button primary" id="app-update-open">${update.source === "signed-updater" ? "Download and install" : "Open GitHub Release"}</button>`
     : "";
   const releaseDetail = update?.available
     ? `Version ${escapeHtml(update.latestVersion ?? "new")} is ready${update.publishedAt ? ` · ${dateTime(update.publishedAt)}` : ""}`
     : "No update available";
-  return `<div class="settings-stack"><article class="panel settings-section"><div><h2>Updates</h2><p>Signed desktop updates are verified before installation.</p></div><div class="update-setting-block"><div><strong>Token Saver ${escapeHtml(update?.currentVersion ?? "1.0.0")}</strong><small>${releaseDetail}</small></div><div><button class="button ghost" id="app-update-check">Check app</button>${releaseAction}</div></div><div class="update-setting-block"><div><strong>Strategy registry</strong><small>${state.lastStrategyCheckAt ? dateTime(state.lastStrategyCheckAt) : "Not checked"}</small></div><button class="button ghost" id="strategy-update-button">Refresh</button></div><div class="setting-row"><div><strong>Automatic app checks</strong></div>${toggle("auto-app-updates", state.settings.autoCheckAppUpdates !== false)}</div><div class="setting-row"><div><strong>Automatic strategy checks</strong></div>${toggle("auto-strategy-updates", state.settings.autoCheckStrategyUpdates !== false)}</div></article><article class="panel settings-section"><div><h2>Analysis</h2></div><div class="setting-row"><div><strong>Detect tools on launch</strong></div>${toggle("auto-scan", state.settings.autoScan)}</div><label class="field-row"><span>Large output threshold</span><input id="large-output-threshold" type="number" value="${state.settings.largeOutputThreshold}"/></label></article><article class="panel"><button class="button ghost" id="export-button">Export</button><button class="button danger" id="clear-button">Clear local data</button></article></div>`;
+  return `<div class="settings-stack"><article class="panel settings-section"><div><h2>Updates</h2><p>Signed desktop updates are verified before installation. Unsigned development builds fall back to the trusted GitHub Release page.</p></div><div class="update-setting-block"><div><strong>Token Saver ${escapeHtml(update?.currentVersion ?? "1.0.0")}</strong><small>${releaseDetail}</small></div><div><button class="button ghost" id="app-update-check">Check app</button>${releaseAction}</div></div><div class="update-setting-block"><div><strong>Strategy registry</strong><small>${state.lastStrategyCheckAt ? dateTime(state.lastStrategyCheckAt) : "Not checked"}</small></div><button class="button ghost" id="strategy-update-button">Refresh</button></div><div class="setting-row"><div><strong>Automatic app checks</strong></div>${toggle("auto-app-updates", state.settings.autoCheckAppUpdates !== false)}</div><div class="setting-row"><div><strong>Automatic strategy checks</strong></div>${toggle("auto-strategy-updates", state.settings.autoCheckStrategyUpdates !== false)}</div></article><article class="panel settings-section"><div><h2>Analysis</h2></div><div class="setting-row"><div><strong>Detect tools on launch</strong></div>${toggle("auto-scan", state.settings.autoScan)}</div><label class="field-row"><span>Large output threshold</span><input id="large-output-threshold" type="number" value="${state.settings.largeOutputThreshold}"/></label></article><article class="panel"><button class="button ghost" id="export-button">Export</button><button class="button danger" id="clear-button">Clear local data</button></article></div>`;
 }
