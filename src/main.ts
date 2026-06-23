@@ -6,6 +6,7 @@ import {
   checkNativeAppUpdate,
   detectNativeIntegrations,
   detectNativeStrategyRuntimes,
+  installNativeAppUpdate,
   isTauriRuntime,
   openReleasePage,
   runtimeLabel,
@@ -246,26 +247,42 @@ async function refreshApp(show = true): Promise<void> {
   const checkedAt = new Date().toISOString();
   try {
     const result = await checkNativeAppUpdate();
-    commit({ ...state, appUpdate: {
-      currentVersion: result?.currentVersion ?? "1.0.0",
-      latestVersion: result?.version,
-      available: Boolean(result),
-      releaseUrl: result?.releaseUrl,
-      publishedAt: result?.publishedAt,
-      checkedAt,
-      source: result ? "github-release" : "unavailable",
-    }});
-    if (show) toast(result ? `Version ${result.version} is available.` : "Token Saver is current.", "success");
+    commit({
+      ...state,
+      appUpdate: {
+        configured: result.configured,
+        currentVersion: result.currentVersion,
+        latestVersion: result.version,
+        available: result.available,
+        releaseUrl: result.releaseUrl,
+        publishedAt: result.publishedAt,
+        notes: result.notes,
+        checkedAt,
+        source: result.configured ? "signed-updater" : "github-release",
+      },
+    });
+    if (show) {
+      toast(result.available ? `Version ${result.version} is available.` : "Token Saver is current.", "success");
+    }
   } catch (error) { if (show) toast(`Update check failed: ${String(error)}`, "error"); }
 }
 
-async function openAvailableRelease(): Promise<void> {
-  const url = state.appUpdate?.releaseUrl;
-  if (!url) return toast("No trusted release link is available.", "error");
+async function applyAvailableUpdate(): Promise<void> {
+  const update = state.appUpdate;
+  if (!update?.available) return toast("No application update is currently available.", "error");
+
   try {
-    await openReleasePage(url);
+    if (update.source === "signed-updater" && isTauriRuntime()) {
+      toast("Downloading and verifying the signed update…");
+      await installNativeAppUpdate();
+      return;
+    }
+    if (!update.releaseUrl) throw new Error("No trusted release link is available.");
+    await openReleasePage(update.releaseUrl);
     toast("Opened the GitHub Release in your system browser.", "success");
-  } catch (error) { toast(`Could not open the release: ${String(error)}`, "error"); }
+  } catch (error) {
+    toast(`Could not apply the update: ${String(error)}`, "error");
+  }
 }
 
 function loadDemo(): void {
@@ -320,7 +337,7 @@ function bind(): void {
   document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
   document.querySelector("#strategy-runtime-check")?.addEventListener("click", () => void refreshStrategyRuntimes());
   document.querySelector("#app-update-check")?.addEventListener("click", () => void refreshApp());
-  document.querySelector("#app-update-open")?.addEventListener("click", () => void openAvailableRelease());
+  document.querySelector("#app-update-open")?.addEventListener("click", () => void applyAvailableUpdate());
   document.querySelector("#demo-button")?.addEventListener("click", loadDemo);
   document.querySelector("#back-to-sessions")?.addEventListener("click", () => { selectedSessionId = undefined; render(); });
   document.querySelector("#export-button")?.addEventListener("click", () => exportWorkspace(state));
