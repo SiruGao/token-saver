@@ -105,7 +105,6 @@ export function normalizeClaudeHookEvents(files: NativeHookEventFile[]): ClaudeH
     const project = text(firstPayload.cwd, "Local project");
     const firstPrompt = events.find((event) => event.role === "user" && event.content.trim());
     const ended = events.some((event) => event.type === "sessionend" || event.type === "stop");
-    const failed = events.some((event) => event.type === "posttoolusefailure");
     const startedAt = events[0]?.timestamp ?? new Date().toISOString();
     const finishedAt = events.at(-1)?.timestamp ?? startedAt;
     const durationMs = Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt));
@@ -120,7 +119,8 @@ export function normalizeClaudeHookEvents(files: NativeHookEventFile[]): ClaudeH
       source: `Claude Code hooks/${sessionId}`,
       startedAt,
       durationMinutes: Number.isFinite(durationMs) ? Math.max(1, Math.round(durationMs / 60_000)) : 1,
-      status: failed ? "failed" : ended ? "success" : "unknown",
+      // A failed tool call is evidence of rework, not proof that the task failed.
+      status: ended ? "success" : "unknown",
       usage: {
         input: 0,
         output: 0,
