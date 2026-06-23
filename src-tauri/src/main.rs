@@ -134,7 +134,7 @@ fn detect_strategy_runtimes() -> Vec<StrategyRuntimeDetection> {
 }
 
 #[tauri::command]
-fn enable_claude_event_connector() -> Result<agent_connectors::ConnectorStatus, String> {
+fn enable_claude_event_connector_portable() -> Result<agent_connectors::ConnectorStatus, String> {
     let status = agent_connectors::enable_claude_event_connector()?;
     if let Err(error) = claude_collector::write_portable_collector() {
         let _ = agent_connectors::disable_claude_event_connector();
@@ -172,7 +172,7 @@ fn main() {
             agent_connectors::enable_codex_history_connector,
             agent_connectors::disable_codex_history_connector,
             agent_connectors::sync_codex_history,
-            enable_claude_event_connector,
+            enable_claude_event_connector_portable,
             agent_connectors::disable_claude_event_connector,
             agent_connectors::read_claude_hook_events,
             agent_connectors::acknowledge_claude_hook_events,
