@@ -4,6 +4,19 @@ const publicKey = process.env.TOKEN_SAVER_UPDATER_PUBLIC_KEY?.trim();
 const privateKey = process.env.TAURI_SIGNING_PRIVATE_KEY?.trim();
 const privateKeyPassword = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD;
 
+function rejectCommandText(name, value) {
+  const lower = value.toLowerCase();
+  if (
+    lower.startsWith("cat ")
+    || lower.startsWith("type ")
+    || lower.startsWith("get-content ")
+    || lower.includes("~/.tauri/")
+  ) {
+    console.error(`${name} contains a shell command instead of key file contents.`);
+    process.exit(1);
+  }
+}
+
 if (!publicKey) {
   console.error("TOKEN_SAVER_UPDATER_PUBLIC_KEY is missing.");
   process.exit(1);
@@ -17,9 +30,15 @@ if (privateKeyPassword === undefined) {
   process.exit(1);
 }
 
+rejectCommandText("TOKEN_SAVER_UPDATER_PUBLIC_KEY", publicKey);
+rejectCommandText("TAURI_SIGNING_PRIVATE_KEY", privateKey);
+
 const config = {
   bundle: {
     createUpdaterArtifacts: true,
+    macOS: {
+      signingIdentity: "-",
+    },
   },
   plugins: {
     updater: {
@@ -40,4 +59,4 @@ await writeFile(
   { mode: 0o600 },
 );
 
-console.log("Prepared signed updater release configuration.");
+console.log("Prepared updater configuration with macOS ad-hoc signing.");

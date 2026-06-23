@@ -58,12 +58,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           TOKEN_SAVER_UPDATER_PUBLIC_KEY: ${{ secrets.TOKEN_SAVER_UPDATER_PUBLIC_KEY }}
+          APPLE_SIGNING_IDENTITY: "-"
           RUST_BACKTRACE: "1"
         with:
           tagName: v${{ steps.version.outputs.version }}
           releaseName: Token Saver v${{ steps.version.outputs.version }}
           releaseCommitish: ${{ github.sha }}
-          releaseBody: Signed Token Saver macOS release. Later signed builds can update from inside Settings.
+          releaseBody: Ad-hoc signed Token Saver macOS release. Later signed builds can update from inside Settings.
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
