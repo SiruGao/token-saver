@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app_updates;
 mod proof_db;
 
 use serde::Serialize;
@@ -184,11 +185,17 @@ fn main() {
                 .add_migrations(proof_db::DATABASE_URL, proof_db::migrations())
                 .build(),
         )
+        .setup(|app| {
+            app.handle().plugin(app_updates::plugin())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             detect_integrations,
             scan_local_sessions,
             detect_strategy_runtimes,
-            open_release_url
+            open_release_url,
+            app_updates::check_app_update,
+            app_updates::install_app_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running Token Saver");

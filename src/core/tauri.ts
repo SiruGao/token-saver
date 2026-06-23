@@ -1,10 +1,13 @@
 import type { NativeIntegration, NativeSessionFile } from "../types";
 
 export interface NativeAppUpdate {
-  version: string;
+  configured: boolean;
+  available: boolean;
+  version?: string;
   currentVersion: string;
   releaseUrl?: string;
   publishedAt?: string;
+  notes?: string;
 }
 
 export interface NativeStrategyRuntime {
@@ -80,7 +83,7 @@ export async function detectNativeStrategyRuntimes(): Promise<NativeStrategyRunt
   return invoke<NativeStrategyRuntime[]>("detect_strategy_runtimes");
 }
 
-export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
+async function checkWebPreviewUpdate(): Promise<NativeAppUpdate | null> {
   const currentVersion = await currentAppVersion();
   const response = await fetch(LATEST_RELEASE, {
     cache: "no-store",
@@ -92,6 +95,7 @@ export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
     tag_name?: string;
     html_url?: string;
     published_at?: string;
+    body?: string;
     draft?: boolean;
   };
   const version = release.tag_name?.replace(/^v/, "");
@@ -100,18 +104,40 @@ export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
     throw new Error("GitHub returned an untrusted release URL");
   }
   return {
+    configured: false,
+    available: true,
     version,
     currentVersion,
     releaseUrl: release.html_url,
     publishedAt: release.published_at,
+    notes: release.body,
   };
+}
+
+export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
+  if (!isTauriRuntime()) return checkWebPreviewUpdate();
+  const result = await invoke<NativeAppUpdate>("check_app_update");
+  return result.available ? result : null;
+}
+
+export async function installNativeAppUpdate(): Promise<void> {
+  if (!isTauriRuntime()) {
+    throw new Error("Signed installation requires the desktop application.");
+  }
+  await invoke<void>("install_app_update");
 }
 
 export async function openReleasePage(url: string): Promise<void> {
   if (!isTrustedReleaseUrl(url)) throw new Error("Untrusted release URL");
   if (isTauriRuntime()) {
-    await invoke<void>("open_release_url", { url });
-    return;
+    try {
+      await installNativeAppUpdate();
+      return;
+    } catch (error) {
+      if (!String(error).includes("not configured")) throw error;
+      await invoke<void>("open_release_url", { url });
+      return;
+    }
   }
   window.open(url, "_blank", "noopener,noreferrer");
 }

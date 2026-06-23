@@ -1,7 +1,7 @@
 {
   "name": "token-saver-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Local-first desktop app for diagnosing and reducing AI-agent token waste.",
   "scripts": {
@@ -11,9 +11,10 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "check": "npm run version:check && tsc --noEmit && npm test",
+    "check": "npm run version:check && npm run startup:check && tsc --noEmit && npm test",
     "test": "node --import tsx --test src/**/*.test.ts",
     "version:check": "node scripts/check-version-sync.mjs",
+    "startup:check": "node scripts/check-startup-safety.mjs",
     "release:version": "node scripts/set-version.mjs",
     "registry:check": "node scripts/validate-strategy-registry.mjs",
     "registry:sync": "node scripts/sync-strategy-registry.mjs"
