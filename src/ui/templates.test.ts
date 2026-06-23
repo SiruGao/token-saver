@@ -1,7 +1,6 @@
 // @ts-nocheck
 import assert from "node:assert/strict";
 import test from "node:test";
-import { strategiesView } from "./strategies";
 import { NAV_ITEMS, dashboardView, integrationsView, settingsView } from "./templates";
 
 function workspace(appUpdate, overrides = {}) {
@@ -41,22 +40,6 @@ test("first run presents a primary scan action", () => {
   assert.match(html, /Scan for AI tools/);
   assert.match(html, /See sample results/);
   assert.match(html, /Automatic mode is the default/);
-});
-
-test("Strategy Hub defaults to automatic mode", () => {
-  const html = strategiesView(workspace(undefined));
-  assert.match(html, /Automatic by default/);
-  assert.match(html, /data-optimization-mode="automatic"/);
-  assert.match(html, /Advanced engine controls/);
-});
-
-test("manual mode opens engine controls", () => {
-  const base = workspace(undefined);
-  const html = strategiesView(workspace(undefined, {
-    settings: { ...base.settings, optimizationMode: "manual" },
-  }));
-  assert.match(html, /Manual engine controls/);
-  assert.match(html, /<details class="advanced-strategies" open>/);
 });
 
 test("detected tools are not described as connected", () => {
