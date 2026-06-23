@@ -6,6 +6,7 @@ mod claude_collector;
 mod proof_db;
 mod rtk_adapter;
 mod rtk_installer;
+mod tool_result_isolator;
 
 use serde::Serialize;
 use std::{env, io::ErrorKind, path::PathBuf, process::Command};
@@ -151,7 +152,21 @@ fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(url, None::<&str>).map_err(|error| error.to_string())
 }
 
+fn run_headless_hook_if_requested() -> bool {
+    if !env::args().any(|argument| argument == "--claude-tool-result-hook") {
+        return false;
+    }
+    if let Err(error) = tool_result_isolator::run_hook_from_stdin() {
+        eprintln!("Token Saver tool-result hook skipped: {error}");
+    }
+    true
+}
+
 fn main() {
+    if run_headless_hook_if_requested() {
+        return;
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(
@@ -176,6 +191,9 @@ fn main() {
             agent_connectors::disable_claude_event_connector,
             agent_connectors::read_claude_hook_events,
             agent_connectors::acknowledge_claude_hook_events,
+            tool_result_isolator::inspect_tool_result_isolation,
+            tool_result_isolator::enable_tool_result_isolation,
+            tool_result_isolator::disable_tool_result_isolation,
             rtk_adapter::inspect_rtk_adapter,
             rtk_adapter::preview_rtk_setup,
             rtk_adapter::install_rtk_adapter,
