@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent_connectors;
 mod app_updates;
 mod proof_db;
 mod rtk_adapter;
@@ -156,6 +157,14 @@ fn main() {
             scan_local_sessions,
             detect_strategy_runtimes,
             open_release_url,
+            agent_connectors::inspect_agent_connectors,
+            agent_connectors::enable_codex_history_connector,
+            agent_connectors::disable_codex_history_connector,
+            agent_connectors::sync_codex_history,
+            agent_connectors::enable_claude_event_connector,
+            agent_connectors::disable_claude_event_connector,
+            agent_connectors::read_claude_hook_events,
+            agent_connectors::acknowledge_claude_hook_events,
             rtk_adapter::inspect_rtk_adapter,
             rtk_adapter::preview_rtk_setup,
             rtk_adapter::install_rtk_adapter,
