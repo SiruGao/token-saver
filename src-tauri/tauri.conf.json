@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Token Saver",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "identifier": "com.sirugao.tokensaver",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -29,7 +29,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "category": "DeveloperTool",
     "shortDescription": "Diagnose token waste and coordinate external compression strategies.",
     "longDescription": "A local-first desktop control plane that diagnoses AI-agent token waste, recommends compatible compression strategies, tracks updates, and measures cost per successful task.",
