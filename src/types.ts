@@ -120,6 +120,41 @@ export interface StrategyRecommendation {
   confidence: "low" | "medium" | "high";
 }
 
+export interface RtkGainSummary {
+  totalCommands: number;
+  totalInput: number;
+  totalOutput: number;
+  totalSaved: number;
+  avgSavingsPct: number;
+}
+
+export interface RtkAdapterStatus {
+  installed: boolean;
+  correctBinary: boolean;
+  configured: boolean;
+  version?: string;
+  executablePath?: string;
+  claudeCodeDetected: boolean;
+  canInstall: boolean;
+  canEnable: boolean;
+  canDisable: boolean;
+  detail: string;
+  setupDetail: string;
+  gain?: RtkGainSummary;
+  checkedAt?: string;
+  busy?: boolean;
+  error?: string;
+}
+
+export interface RtkSetupPreview {
+  title: string;
+  description: string;
+  changes: string[];
+  reversible: boolean;
+  requiresRestart: boolean;
+  source: string;
+}
+
 export interface AppUpdateStatus {
   configured?: boolean;
   currentVersion: string;
@@ -212,6 +247,7 @@ export interface WorkspaceState {
   proofRecords?: ProofRecord[];
   proofStorage?: ProofStorageStatus;
   fixProposals?: FixProposal[];
+  rtkAdapter?: RtkAdapterStatus;
   settings: AppSettings;
   lastScanAt?: string;
   lastStrategyCheckAt?: string;

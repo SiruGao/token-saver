@@ -1,7 +1,7 @@
 import { buildStrategyRoutePlan } from "../strategies/policy";
 import { recommendationsForFindings, strategyRegistry } from "../strategies/registry";
-import type { CompressionStrategy, WorkspaceState } from "../types";
-import { dateTime, escapeHtml } from "./format";
+import type { CompressionStrategy, RtkAdapterStatus, WorkspaceState } from "../types";
+import { compactNumber, dateTime, escapeHtml, percent } from "./format";
 import "./runtime.css";
 
 function strategies(state: WorkspaceState): CompressionStrategy[] {
@@ -20,6 +20,48 @@ function runtimeLabel(strategy: CompressionStrategy): string {
   if (!strategy.runtimeDetected) return "Not installed";
   if (!strategy.runtimeHealthy) return "Needs review";
   return strategy.runtimeVersion ?? "Ready";
+}
+
+function rtkPrimaryAction(status: RtkAdapterStatus | undefined): string {
+  if (!status) return `<button class="button ghost" id="rtk-refresh">Check setup</button>`;
+  if (status.busy) return `<button class="button primary" disabled>Working…</button>`;
+  if (!status.installed && status.canInstall) {
+    return `<button class="button primary" id="rtk-install">${status.claudeCodeDetected ? "Install and enable" : "Install RTK"}</button>`;
+  }
+  if (status.canEnable) return `<button class="button primary" id="rtk-enable">Enable for Claude Code</button>`;
+  if (status.canDisable) return `<button class="button ghost" id="rtk-disable">Disable</button>`;
+  return `<button class="button ghost" id="rtk-refresh">Check again</button>`;
+}
+
+function rtkSetupCard(status: RtkAdapterStatus | undefined): string {
+  if (!status) {
+    return `<article class="quick-setup-card"><div class="quick-setup-icon">RTK</div><div><span class="eyebrow">RECOMMENDED LOW-RISK ENGINE</span><h2>Command-output optimization</h2><p>Check whether RTK is installed and ready for one-time Claude Code setup.</p></div><div class="quick-setup-actions">${rtkPrimaryAction(status)}</div></article>`;
+  }
+
+  const tone = status.error || (status.installed && !status.correctBinary)
+    ? "error"
+    : status.configured
+      ? "active"
+      : status.correctBinary
+        ? "ready"
+        : "idle";
+  const headline = status.error
+    ? "RTK needs attention"
+    : status.configured
+      ? "Command-output optimization is enabled"
+      : status.correctBinary
+        ? "RTK is ready for one-time setup"
+        : status.installed
+          ? "A conflicting rtk executable was found"
+          : status.claudeCodeDetected
+            ? "Install and enable command-output optimization"
+            : "Install command-output optimization";
+  const gain = status.gain;
+  const stats = gain
+    ? `<div class="rtk-gain-grid"><span><strong>${compactNumber(gain.totalSaved)}</strong><small>estimated tokens saved</small></span><span><strong>${gain.totalCommands}</strong><small>commands measured</small></span><span><strong>${percent(gain.avgSavingsPct / 100)}</strong><small>average reduction</small></span></div>`
+    : `<div class="rtk-no-gain">Savings will appear after RTK processes supported commands.</div>`;
+
+  return `<article class="quick-setup-card ${tone}"><div class="quick-setup-icon">RTK</div><div class="quick-setup-copy"><div class="quick-setup-heading"><div><span class="eyebrow">RECOMMENDED LOW-RISK ENGINE</span><h2>${escapeHtml(headline)}</h2></div><span class="adapter-state ${tone}">${status.configured ? "Enabled" : status.correctBinary ? "Ready" : status.installed ? "Conflict" : "Not installed"}</span></div><p>${escapeHtml(status.error ?? status.setupDetail)}</p>${status.configured ? stats : `<div class="setup-facts"><span>Source <strong>rtk-ai/rtk</strong></span><span>Client <strong>Claude Code</strong></span><span>Risk <strong>Low</strong></span><span>Rollback <strong>Included</strong></span></div>`}<small class="adapter-detail">${escapeHtml(status.detail)}${status.version ? ` · ${escapeHtml(status.version)}` : ""}</small></div><div class="quick-setup-actions">${rtkPrimaryAction(status)}${status.installed && !status.busy ? `<button class="text-button" id="rtk-refresh">Refresh</button>` : ""}</div></article>`;
 }
 
 function strategyCard(strategy: CompressionStrategy, recommendationCount: number, automatic: boolean): string {
@@ -97,6 +139,8 @@ export function strategiesView(state: WorkspaceState): string {
         <button class="mode-option ${automatic ? "" : "active"}" data-optimization-mode="manual"><strong>Manual</strong><small>Control each strategy yourself</small></button>
       </div>
     </section>
+
+    ${rtkSetupCard(state.rtkAdapter)}
 
     <div class="strategy-summary-grid">
       <article><span>${automatic ? "Automatic routes" : "Strategy matches"}</span><strong>${automatic ? autoRoutable : recommendations.length}</strong><small>${automatic ? `${reviewRequired} require review` : "Based on current findings"}</small></article>
