@@ -17,7 +17,7 @@ function statusLabel(strategy: CompressionStrategy): string {
 function runtimeLabel(strategy: CompressionStrategy): string {
   if (!strategy.runtimeCheckedAt) return "Not checked";
   if (!strategy.runtimeDetected) return "Not found";
-  if (!strategy.runtimeHealthy) return "Unhealthy";
+  if (!strategy.runtimeHealthy) return "Needs review";
   return strategy.runtimeVersion ?? "Detected";
 }
 
@@ -33,12 +33,12 @@ function strategyCard(strategy: CompressionStrategy, recommendationCount: number
         ? "healthy"
         : "unhealthy";
   const runtimeTitle = !strategy.runtimeCheckedAt
-    ? "Runtime not checked"
+    ? "Local engine not checked"
     : !strategy.runtimeDetected
-      ? "Local runtime missing"
+      ? "Local engine not found"
       : strategy.runtimeHealthy
-        ? "Healthy local runtime"
-        : "Runtime requires review";
+        ? "Local engine is healthy"
+        : "Local engine needs review";
 
   return `
     <article class="strategy-card ${strategy.enabled ? "enabled" : ""}">
@@ -54,24 +54,24 @@ function strategyCard(strategy: CompressionStrategy, recommendationCount: number
         <span><strong>Mode</strong>${escapeHtml(strategy.mode)}</span>
         <span><strong>Risk</strong>${escapeHtml(strategy.risk)}</span>
         <span><strong>Registry</strong>${version}</span>
-        <span><strong>Runtime</strong>${escapeHtml(runtimeLabel(strategy))}</span>
-        <span><strong>Doctor matches</strong>${recommendationCount}</span>
+        <span><strong>Engine</strong>${escapeHtml(runtimeLabel(strategy))}</span>
+        <span><strong>Matches</strong>${recommendationCount}</span>
       </div>
       <div class="strategy-runtime ${runtimeTone}">
         <span></span>
         <div>
           <strong>${runtimeTitle}</strong>
-          <small>${escapeHtml(strategy.runtimeDetail ?? "Run the read-only runtime check to inspect locally installed engines.")}</small>
+          <small>${escapeHtml(strategy.runtimeDetail ?? "Run the read-only engine check before reviewing this fix path.")}</small>
         </div>
       </div>
       <div class="capability-list">${strategy.capabilities.map((capability) => `<span>${escapeHtml(capability)}</span>`).join("")}</div>
-      ${strategy.installCommand ? `<div class="strategy-command"><span>External install</span><code>${escapeHtml(strategy.installCommand)}</code></div>` : ""}
+      ${strategy.installCommand ? `<div class="strategy-command"><span>External installation</span><code>${escapeHtml(strategy.installCommand)}</code></div>` : ""}
       <div class="strategy-card-foot">
         <div>
-          <strong>${strategy.enabled ? "Selected for routing" : "Not selected"}</strong>
-          <small>${strategy.managedExternally ? "Third-party runtime; Token Saver manages compatibility and policy, not its source code." : "Managed by Token Saver."}</small>
+          <strong>${strategy.enabled ? "Available to recommended fixes" : "Not selected"}</strong>
+          <small>${strategy.managedExternally ? "Third-party engine. Token Saver controls policy, approval, compatibility, and proof." : "Managed by Token Saver."}</small>
         </div>
-        <button class="button ${strategy.enabled ? "ghost" : "primary"}" data-strategy-toggle="${escapeHtml(strategy.id)}">${strategy.enabled ? "Disable" : "Select strategy"}</button>
+        <button class="button ${strategy.enabled ? "ghost" : "primary"}" data-strategy-toggle="${escapeHtml(strategy.id)}">${strategy.enabled ? "Disable" : "Allow for fixes"}</button>
       </div>
     </article>`;
 }
@@ -86,43 +86,43 @@ export function strategiesView(state: WorkspaceState): string {
   return `
     <div class="strategy-hero">
       <div>
-        <span class="eyebrow">NEUTRAL COMPRESSION CONTROL PLANE</span>
-        <h2>Doctor diagnoses. Strategy Hub chooses the engine.</h2>
-        <p>Token Saver separates registry metadata, local runtime detection, execution approval, and quality verification. Detecting a runtime never executes it.</p>
+        <span class="eyebrow">SAFE FIXES</span>
+        <h2>Review what can change before anything changes.</h2>
+        <p>Token Saver keeps diagnosis, recommendation, engine detection, approval, execution, rollback, and outcome verification as separate gates.</p>
       </div>
       <div class="strategy-hero-metrics">
-        <span><strong>${availableStrategies.length}</strong> registered</span>
+        <span><strong>${recommendations.length}</strong> matches</span>
         <span><strong>${healthyRuntimes}</strong> healthy</span>
-        <span><strong>${selected}</strong> selected</span>
+        <span><strong>${selected}</strong> allowed</span>
         <span><strong>${updates}</strong> updates</span>
       </div>
       <div class="strategy-hero-actions">
-        <button class="button ghost" id="strategy-runtime-check">Check runtimes</button>
-        <button class="button primary" id="strategy-update-button">Check updates</button>
+        <button class="button ghost" id="strategy-runtime-check">Check local engines</button>
+        <button class="button primary" id="strategy-update-button">Refresh registry</button>
       </div>
     </div>
 
     <div class="strategy-flow">
-      <div><span>1</span><strong>Doctor</strong><small>Find the waste pattern</small></div>
+      <div><span>1</span><strong>Checkup</strong><small>Find the evidence</small></div>
       <b>→</b>
-      <div><span>2</span><strong>Policy</strong><small>Match compatible strategies</small></div>
+      <div><span>2</span><strong>Match</strong><small>Select a compatible fix</small></div>
       <b>→</b>
-      <div><span>3</span><strong>Adapter</strong><small>Preview a healthy engine</small></div>
+      <div><span>3</span><strong>Preview</strong><small>Explain risk and rollback</small></div>
       <b>→</b>
-      <div><span>4</span><strong>Proof</strong><small>Compare cost, quality, and rework</small></div>
+      <div><span>4</span><strong>Results</strong><small>Verify the next outcome</small></div>
     </div>
 
     <article class="panel strategy-recommendations">
       <div class="panel-head">
-        <div><span class="eyebrow">DOCTOR-DRIVEN ROUTING</span><h2>Recommendations from current findings</h2></div>
-        <span class="muted">${recommendations.length} strategy matches</span>
+        <div><span class="eyebrow">CHECKUP MATCHES</span><h2>Fix paths for current findings</h2></div>
+        <span class="muted">${recommendations.length} matches</span>
       </div>
       ${recommendations.length
         ? `<div class="recommendation-list">${recommendations.slice(0, 8).map((item) => {
             const strategy = availableStrategies.find((candidate) => candidate.id === item.strategyId);
             return `<div><span class="confidence ${item.confidence}">${item.confidence}</span><strong>${escapeHtml(strategy?.name ?? item.strategyId)}</strong><code>${escapeHtml(item.findingType)}</code><p>${escapeHtml(item.reason)}</p></div>`;
           }).join("")}</div>`
-        : `<p class="muted">Import transcripts or load the demo workspace. Doctor findings will be mapped to compatible strategies here.</p>`}
+        : `<p class="muted">No compatible fix is being recommended yet. Token Saver will not run an engine merely because it is installed.</p>`}
     </article>
 
     <div class="strategy-grid">
@@ -130,8 +130,8 @@ export function strategiesView(state: WorkspaceState): string {
     </div>
 
     <article class="panel strategy-governance">
-      <strong>Token Saver remains vendor-neutral.</strong>
-      <p>Third-party strategies keep their own licenses, release channels, and security boundaries. Runtime detection runs a fixed version command only. Preview, backup, execution, rollback, and outcome verification remain separate gates.</p>
+      <strong>Third-party engines remain separate from Token Saver.</strong>
+      <p>They keep their own licenses, releases, and security boundaries. Token Saver decides when a fix is appropriate, requires approval where necessary, records rollback information, and verifies the result.</p>
       <small>${state.lastStrategyCheckAt ? `Last registry check: ${dateTime(state.lastStrategyCheckAt)}` : "Registry has not been checked in this workspace."}</small>
     </article>`;
 }
