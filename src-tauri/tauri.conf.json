@@ -33,10 +33,5 @@
     "shortDescription": "Diagnose token waste and coordinate external compression strategies.",
     "longDescription": "A local-first desktop control plane that diagnoses AI-agent token waste, recommends compatible compression strategies, tracks updates, and measures cost per successful task.",
     "copyright": "Copyright © 2026 SiruGao"
-  },
-  "plugins": {
-    "sql": {
-      "preload": ["sqlite:token-saver.db"]
-    }
   }
 }
