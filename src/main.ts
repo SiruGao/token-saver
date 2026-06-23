@@ -3,6 +3,7 @@ import "./strategy.css";
 import "./ui/connectors.css";
 import { createConnectorRuntime } from "./core/connector-runtime";
 import { analyzeSessions, parseTranscript } from "./core/import-router";
+import { createIsolationRuntime } from "./core/isolation-runtime";
 import {
   disableRtkForClaude,
   enableRtkForClaude,
@@ -173,6 +174,7 @@ function toast(message: string, tone: "success" | "error" | "info" = "info"): vo
 }
 
 const connectorRuntime = createConnectorRuntime({ getState: () => state, commit, toast });
+const isolationRuntime = createIsolationRuntime({ getState: () => state, commit, toast });
 
 function mergeImportedSessions(imported: AgentSession[]): void {
   if (!imported.length) return;
@@ -213,6 +215,7 @@ async function detectTools(): Promise<void> {
     commit({ ...state, integrations, lastScanAt: new Date().toISOString() });
     await connectorRuntime.refreshStatuses(false);
     await refreshRtkAdapter(false);
+    await isolationRuntime.refresh(false);
     toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Access remains off until you approve it.`, found ? "success" : "info");
   } catch (error) {
     toast(`Detection failed: ${String(error)}`, "error");
@@ -354,9 +357,10 @@ async function refreshStrategyRuntimes(): Promise<void> {
     const strategies = applyRuntimeDetections(mergeStrategyRegistry(state.strategies), detected, new Date().toISOString());
     commit({ ...state, strategies });
     await refreshRtkAdapter(false);
+    await isolationRuntime.refresh(false);
     const found = detected.filter((item) => item.detected).length;
-    const ready = detected.filter((item) => item.healthy).length;
-    toast(`Found ${found} local engine${found === 1 ? "" : "s"}; ${ready} ready to use.`, ready ? "success" : "info");
+    const ready = detected.filter((item) => item.healthy).length + (state.toolResultIsolation?.enabled ? 1 : 0);
+    toast(`Found ${found} external engine${found === 1 ? "" : "s"}; ${ready} total optimization${ready === 1 ? "" : "s"} ready.`, ready ? "success" : "info");
   } catch (error) {
     toast(`Engine detection failed: ${String(error)}`, "error");
   }
@@ -461,7 +465,7 @@ async function clearAllData(): Promise<void> {
   selectedSessionId = undefined;
   proofResetInProgress = false;
   render();
-  toast("Local workspace and Proof Ledger cleared. Connector approvals were not changed.", "success");
+  toast("Local workspace and Proof Ledger cleared. Connector and strategy approvals were not changed.", "success");
 }
 
 function bind(): void {
@@ -490,7 +494,7 @@ function bind(): void {
   document.querySelector("#back-to-sessions")?.addEventListener("click", () => { selectedSessionId = undefined; render(); });
   document.querySelector("#export-button")?.addEventListener("click", () => exportWorkspace(state));
   document.querySelector("#clear-button")?.addEventListener("click", () => {
-    if (window.confirm("Remove imported data and the local Proof Ledger? Connector approvals will remain unchanged.")) void clearAllData();
+    if (window.confirm("Remove imported data and the local Proof Ledger? Connector and strategy approvals will remain unchanged.")) void clearAllData();
   });
   document.querySelectorAll<HTMLElement>("[data-optimization-mode]").forEach((item) => item.addEventListener("click", () => {
     const mode = item.dataset.optimizationMode;
@@ -507,6 +511,7 @@ function bind(): void {
     commit({ ...state, strategies: mergeStrategyRegistry(state.strategies).map((strategy) => strategy.id === id ? { ...strategy, enabled: !strategy.enabled } : strategy) });
   });
   connectorRuntime.bind();
+  isolationRuntime.bind();
 }
 
 function render(): void {
@@ -527,6 +532,7 @@ window.ondrop = async (event) => {
 async function startDesktopFeatures(): Promise<void> {
   await connectorRuntime.start();
   await refreshRtkAdapter(false);
+  await isolationRuntime.refresh(false);
   if (state.settings.autoScan && !state.lastScanAt) await detectTools();
 }
 
