@@ -5,13 +5,10 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
-const INSTALLER_URL: &str = "https://raw.githubusercontent.com/rtk-ai/rtk/master/install.sh";
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all(serialize = "camelCase", deserialize = "snake_case"))]
 pub struct RtkGainSummary {
     pub total_commands: u64,
     pub total_input: u64,
@@ -134,10 +131,7 @@ fn find_verified_binary() -> Result<Option<(PathBuf, String, RtkGainSummary)>, S
 
 fn claude_paths() -> Result<(PathBuf, PathBuf), String> {
     let home = home_dir()?;
-    Ok((
-        home.join(".claude/hooks/rtk-rewrite.sh"),
-        home.join(".claude/settings.json"),
-    ))
+    Ok((home.join(".claude/hooks/rtk-rewrite.sh"), home.join(".claude/settings.json")))
 }
 
 fn claude_detected() -> bool {
@@ -234,37 +228,10 @@ pub fn preview_rtk_setup() -> Result<RtkSetupPreview, String> {
 
 #[tauri::command]
 pub fn install_rtk_adapter() -> Result<RtkAdapterStatus, String> {
-    if !cfg!(any(target_os = "macos", target_os = "linux")) {
-        return Err("Automatic RTK installation is currently supported on macOS and Linux only.".to_string());
-    }
     if find_verified_binary()?.is_some() {
         return inspect_internal();
     }
-
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| error.to_string())?
-        .as_millis();
-    let installer = env::temp_dir().join(format!("token-saver-rtk-installer-{stamp}.sh"));
-    let download = Command::new("curl")
-        .args(["-fsSL", INSTALLER_URL, "-o"])
-        .arg(&installer)
-        .output()
-        .map_err(|error| format!("Could not download the official RTK installer: {error}"))?;
-    if !download.status.success() {
-        let _ = fs::remove_file(&installer);
-        return Err(format!("RTK installer download failed: {}", combined_output(&download)));
-    }
-
-    let install = Command::new("sh")
-        .arg(&installer)
-        .output()
-        .map_err(|error| format!("Could not run the RTK installer: {error}"))?;
-    let _ = fs::remove_file(&installer);
-    if !install.status.success() {
-        return Err(format!("RTK installation failed: {}", combined_output(&install)));
-    }
-
+    crate::rtk_installer::install_official_rtk()?;
     let status = inspect_internal()?;
     if !status.correct_binary {
         return Err("RTK installation completed, but Token Saver could not verify the installed binary with `rtk gain`.".to_string());
