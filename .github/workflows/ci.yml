@@ -69,3 +69,50 @@ jobs:
           name: cargo-check-log
           path: cargo-check.log
           if-no-files-found: warn
+
+  macos-release-diagnostic:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TOKEN_SAVER_UPDATER_PUBLIC_KEY: ${{ secrets.TOKEN_SAVER_UPDATER_PUBLIC_KEY }}
+      RUST_BACKTRACE: "1"
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm install
+      - name: Verify signing secrets exist
+        shell: bash
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          test -n "$TOKEN_SAVER_UPDATER_PUBLIC_KEY"
+          test "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD+x}" = x
+      - name: Prepare release configuration
+        run: npm run release:config
+      - name: Build signed macOS package
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run tauri build -- \
+            --target aarch64-apple-darwin \
+            --config src-tauri/tauri.release.conf.json \
+            2>&1 | tee macos-release-build.log
+      - name: Upload macOS release diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release-diagnostics
+          path: |
+            macos-release-build.log
+            src-tauri/tauri.release.conf.json
+          if-no-files-found: warn
