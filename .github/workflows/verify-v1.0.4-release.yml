@@ -1,0 +1,38 @@
+name: Verify v1.0.4 release assets
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-release-assets:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Inspect published release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/v1.0.4" > release.json
+          jq -r '.assets[].name' release.json | sort | tee assets.txt
+          grep -Fx 'Token.Saver_1.0.4_aarch64.dmg' assets.txt
+          grep -Fx 'Token.Saver_aarch64.app.tar.gz' assets.txt
+          grep -Fx 'Token.Saver_aarch64.app.tar.gz.sig' assets.txt
+          grep -Fx 'latest.json' assets.txt
+          jq -e '.tag_name == "v1.0.4" and .draft == false and .prerelease == false' release.json
+          LATEST_URL=$(jq -r '.assets[] | select(.name == "latest.json") | .browser_download_url' release.json)
+          curl --fail --location --silent --show-error "$LATEST_URL" --output latest.json
+          jq -e '.version == "1.0.4" and (.platforms | length > 0)' latest.json
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v1.0.4-release-verification
+          path: |
+            release.json
+            assets.txt
+            latest.json
+          if-no-files-found: warn
