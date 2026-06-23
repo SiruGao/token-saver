@@ -83,13 +83,15 @@ export async function detectNativeStrategyRuntimes(): Promise<NativeStrategyRunt
   return invoke<NativeStrategyRuntime[]>("detect_strategy_runtimes");
 }
 
-async function checkWebPreviewUpdate(): Promise<NativeAppUpdate | null> {
+async function checkGitHubReleaseUpdate(): Promise<NativeAppUpdate> {
   const currentVersion = await currentAppVersion();
   const response = await fetch(LATEST_RELEASE, {
     cache: "no-store",
     headers: { Accept: "application/vnd.github+json" },
   });
-  if (response.status === 404) return null;
+  if (response.status === 404) {
+    return { configured: false, available: false, currentVersion };
+  }
   if (!response.ok) throw new Error(`GitHub release check failed with ${response.status}`);
   const release = await response.json() as {
     tag_name?: string;
@@ -97,9 +99,12 @@ async function checkWebPreviewUpdate(): Promise<NativeAppUpdate | null> {
     published_at?: string;
     body?: string;
     draft?: boolean;
+    prerelease?: boolean;
   };
   const version = release.tag_name?.replace(/^v/, "");
-  if (!version || release.draft || !isNewerVersion(version, currentVersion)) return null;
+  if (!version || release.draft || release.prerelease || !isNewerVersion(version, currentVersion)) {
+    return { configured: false, available: false, currentVersion };
+  }
   if (!release.html_url || !isTrustedReleaseUrl(release.html_url)) {
     throw new Error("GitHub returned an untrusted release URL");
   }
@@ -114,10 +119,10 @@ async function checkWebPreviewUpdate(): Promise<NativeAppUpdate | null> {
   };
 }
 
-export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
-  if (!isTauriRuntime()) return checkWebPreviewUpdate();
+export async function checkNativeAppUpdate(): Promise<NativeAppUpdate> {
+  if (!isTauriRuntime()) return checkGitHubReleaseUpdate();
   const result = await invoke<NativeAppUpdate>("check_app_update");
-  return result.available ? result : null;
+  return result.configured ? result : checkGitHubReleaseUpdate();
 }
 
 export async function installNativeAppUpdate(): Promise<void> {
@@ -130,14 +135,8 @@ export async function installNativeAppUpdate(): Promise<void> {
 export async function openReleasePage(url: string): Promise<void> {
   if (!isTrustedReleaseUrl(url)) throw new Error("Untrusted release URL");
   if (isTauriRuntime()) {
-    try {
-      await installNativeAppUpdate();
-      return;
-    } catch (error) {
-      if (!String(error).includes("not configured")) throw error;
-      await invoke<void>("open_release_url", { url });
-      return;
-    }
+    await invoke<void>("open_release_url", { url });
+    return;
   }
   window.open(url, "_blank", "noopener,noreferrer");
 }
