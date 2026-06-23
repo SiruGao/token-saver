@@ -2,6 +2,7 @@
 
 mod agent_connectors;
 mod app_updates;
+mod claude_collector;
 mod proof_db;
 mod rtk_adapter;
 mod rtk_installer;
@@ -133,6 +134,16 @@ fn detect_strategy_runtimes() -> Vec<StrategyRuntimeDetection> {
 }
 
 #[tauri::command]
+fn enable_claude_event_connector() -> Result<agent_connectors::ConnectorStatus, String> {
+    let status = agent_connectors::enable_claude_event_connector()?;
+    if let Err(error) = claude_collector::write_portable_collector() {
+        let _ = agent_connectors::disable_claude_event_connector();
+        return Err(error);
+    }
+    Ok(status)
+}
+
+#[tauri::command]
 fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     if !url.starts_with(RELEASE_URL_PREFIX) {
         return Err("Only Token Saver GitHub Release URLs are allowed.".to_string());
@@ -161,7 +172,7 @@ fn main() {
             agent_connectors::enable_codex_history_connector,
             agent_connectors::disable_codex_history_connector,
             agent_connectors::sync_codex_history,
-            agent_connectors::enable_claude_event_connector,
+            enable_claude_event_connector,
             agent_connectors::disable_claude_event_connector,
             agent_connectors::read_claude_hook_events,
             agent_connectors::acknowledge_claude_hook_events,
