@@ -16,12 +16,16 @@ function statusLabel(strategy: CompressionStrategy): string {
 
 function runtimeLabel(strategy: CompressionStrategy): string {
   if (!strategy.runtimeCheckedAt) return "Not checked";
-  if (!strategy.runtimeDetected) return "Not found";
+  if (!strategy.runtimeDetected) return "Not installed";
   if (!strategy.runtimeHealthy) return "Needs review";
-  return strategy.runtimeVersion ?? "Detected";
+  return strategy.runtimeVersion ?? "Ready";
 }
 
-function strategyCard(strategy: CompressionStrategy, recommendationCount: number): string {
+function strategyCard(
+  strategy: CompressionStrategy,
+  recommendationCount: number,
+  automatic: boolean,
+): string {
   const version = strategy.latestVersion
     ? `Latest ${escapeHtml(strategy.latestVersion)}`
     : "Version not checked";
@@ -35,10 +39,16 @@ function strategyCard(strategy: CompressionStrategy, recommendationCount: number
   const runtimeTitle = !strategy.runtimeCheckedAt
     ? "Local engine not checked"
     : !strategy.runtimeDetected
-      ? "Local engine not found"
+      ? "Local engine not installed"
       : strategy.runtimeHealthy
-        ? "Local engine is healthy"
-        : "Local engine needs review";
+        ? "Ready for compatible routes"
+        : "Engine needs review";
+  const selectedLabel = automatic
+    ? strategy.enabled ? "Allowed in automatic routing" : "Excluded from automatic routing"
+    : strategy.enabled ? "Enabled manually" : "Disabled";
+  const buttonLabel = automatic
+    ? strategy.enabled ? "Exclude" : "Allow in routing"
+    : strategy.enabled ? "Disable" : "Enable";
 
   return `
     <article class="strategy-card ${strategy.enabled ? "enabled" : ""}">
@@ -51,27 +61,27 @@ function strategyCard(strategy: CompressionStrategy, recommendationCount: number
         <span class="strategy-status ${strategy.state}">${statusLabel(strategy)}</span>
       </div>
       <div class="strategy-meta">
-        <span><strong>Mode</strong>${escapeHtml(strategy.mode)}</span>
+        <span><strong>Best for</strong>${escapeHtml(strategy.capabilities[0] ?? strategy.mode)}</span>
         <span><strong>Risk</strong>${escapeHtml(strategy.risk)}</span>
         <span><strong>Registry</strong>${version}</span>
-        <span><strong>Engine</strong>${escapeHtml(runtimeLabel(strategy))}</span>
+        <span><strong>Runtime</strong>${escapeHtml(runtimeLabel(strategy))}</span>
         <span><strong>Matches</strong>${recommendationCount}</span>
       </div>
       <div class="strategy-runtime ${runtimeTone}">
         <span></span>
         <div>
           <strong>${runtimeTitle}</strong>
-          <small>${escapeHtml(strategy.runtimeDetail ?? "Run the read-only engine check before reviewing this fix path.")}</small>
+          <small>${escapeHtml(strategy.runtimeDetail ?? "Use the read-only engine check before enabling this strategy on a live client.")}</small>
         </div>
       </div>
       <div class="capability-list">${strategy.capabilities.map((capability) => `<span>${escapeHtml(capability)}</span>`).join("")}</div>
-      ${strategy.installCommand ? `<div class="strategy-command"><span>External installation</span><code>${escapeHtml(strategy.installCommand)}</code></div>` : ""}
+      ${strategy.installCommand ? `<details class="strategy-install"><summary>Installation details</summary><div class="strategy-command"><span>External command</span><code>${escapeHtml(strategy.installCommand)}</code></div></details>` : ""}
       <div class="strategy-card-foot">
         <div>
-          <strong>${strategy.enabled ? "Available to recommended fixes" : "Not selected"}</strong>
-          <small>${strategy.managedExternally ? "Third-party engine. Token Saver controls policy, approval, compatibility, and proof." : "Managed by Token Saver."}</small>
+          <strong>${selectedLabel}</strong>
+          <small>${strategy.managedExternally ? "Third-party engine; Token Saver manages compatibility, routing, and proof." : "Managed by Token Saver."}</small>
         </div>
-        <button class="button ${strategy.enabled ? "ghost" : "primary"}" data-strategy-toggle="${escapeHtml(strategy.id)}">${strategy.enabled ? "Disable" : "Allow for fixes"}</button>
+        <button class="button ${strategy.enabled ? "ghost" : "primary"}" data-strategy-toggle="${escapeHtml(strategy.id)}">${buttonLabel}</button>
       </div>
     </article>`;
 }
@@ -79,59 +89,60 @@ function strategyCard(strategy: CompressionStrategy, recommendationCount: number
 export function strategiesView(state: WorkspaceState): string {
   const availableStrategies = strategies(state);
   const recommendations = recommendationsForFindings(state.findings, availableStrategies);
+  const automatic = state.settings.optimizationMode !== "manual";
   const selected = availableStrategies.filter((strategy) => strategy.enabled).length;
+  const readyRuntimes = availableStrategies.filter((strategy) => strategy.runtimeHealthy).length;
   const updates = availableStrategies.filter((strategy) => strategy.state === "update-available").length;
-  const healthyRuntimes = availableStrategies.filter((strategy) => strategy.runtimeHealthy).length;
 
   return `
-    <div class="strategy-hero">
+    <section class="strategy-mode-panel">
       <div>
-        <span class="eyebrow">SAFE FIXES</span>
-        <h2>Review what can change before anything changes.</h2>
-        <p>Token Saver keeps diagnosis, recommendation, engine detection, approval, execution, rollback, and outcome verification as separate gates.</p>
+        <span class="eyebrow">STRATEGY HUB</span>
+        <h2>Automatic by default. Fully controllable when needed.</h2>
+        <p>Most users can leave Token Saver in Automatic mode. Advanced users can inspect engines, compatibility, versions, risk, and routing decisions here.</p>
       </div>
-      <div class="strategy-hero-metrics">
-        <span><strong>${recommendations.length}</strong> matches</span>
-        <span><strong>${healthyRuntimes}</strong> healthy</span>
-        <span><strong>${selected}</strong> allowed</span>
-        <span><strong>${updates}</strong> updates</span>
+      <div class="mode-selector">
+        <button class="mode-option ${automatic ? "active" : ""}" data-optimization-mode="automatic">
+          <strong>Automatic</strong>
+          <small>Use compatible low-risk strategies</small>
+        </button>
+        <button class="mode-option ${automatic ? "" : "active"}" data-optimization-mode="manual">
+          <strong>Manual</strong>
+          <small>Control each strategy yourself</small>
+        </button>
       </div>
-      <div class="strategy-hero-actions">
-        <button class="button ghost" id="strategy-runtime-check">Check local engines</button>
-        <button class="button primary" id="strategy-update-button">Refresh registry</button>
-      </div>
-    </div>
+    </section>
 
-    <div class="strategy-flow">
-      <div><span>1</span><strong>Checkup</strong><small>Find the evidence</small></div>
-      <b>→</b>
-      <div><span>2</span><strong>Match</strong><small>Select a compatible fix</small></div>
-      <b>→</b>
-      <div><span>3</span><strong>Preview</strong><small>Explain risk and rollback</small></div>
-      <b>→</b>
-      <div><span>4</span><strong>Results</strong><small>Verify the next outcome</small></div>
+    <div class="strategy-summary-grid">
+      <article><span>Recommended matches</span><strong>${recommendations.length}</strong><small>Based on current findings</small></article>
+      <article><span>Selected strategies</span><strong>${selected}</strong><small>${automatic ? "Allowed for routing" : "Enabled manually"}</small></article>
+      <article><span>Ready locally</span><strong>${readyRuntimes}</strong><small>Runtime detected</small></article>
+      <article><span>Registry updates</span><strong>${updates}</strong><small>${state.lastStrategyCheckAt ? dateTime(state.lastStrategyCheckAt) : "Not checked"}</small></article>
     </div>
 
     <article class="panel strategy-recommendations">
       <div class="panel-head">
-        <div><span class="eyebrow">CHECKUP MATCHES</span><h2>Fix paths for current findings</h2></div>
-        <span class="muted">${recommendations.length} matches</span>
+        <div><span class="eyebrow">CURRENT RECOMMENDATIONS</span><h2>${automatic ? "What Token Saver would choose" : "Matches available for manual review"}</h2></div>
+        <div class="strategy-hero-actions"><button class="button ghost" id="strategy-runtime-check">Check local engines</button><button class="button primary" id="strategy-update-button">Refresh registry</button></div>
       </div>
       ${recommendations.length
         ? `<div class="recommendation-list">${recommendations.slice(0, 8).map((item) => {
             const strategy = availableStrategies.find((candidate) => candidate.id === item.strategyId);
             return `<div><span class="confidence ${item.confidence}">${item.confidence}</span><strong>${escapeHtml(strategy?.name ?? item.strategyId)}</strong><code>${escapeHtml(item.findingType)}</code><p>${escapeHtml(item.reason)}</p></div>`;
           }).join("")}</div>`
-        : `<p class="muted">No compatible fix is being recommended yet. Token Saver will not run an engine merely because it is installed.</p>`}
+        : `<div class="empty-inline">No recommendation yet. Token Saver will not select an engine without a matching finding.</div>`}
     </article>
 
-    <div class="strategy-grid">
-      ${availableStrategies.map((strategy) => strategyCard(strategy, recommendations.filter((item) => item.strategyId === strategy.id).length)).join("")}
-    </div>
+    <details class="advanced-strategies" ${automatic ? "" : "open"}>
+      <summary><div><strong>${automatic ? "Advanced engine controls" : "Manual engine controls"}</strong><small>${automatic ? "Optional: inspect or limit the engines available to smart routing." : "Choose exactly which engines Token Saver may use."}</small></div><span>${availableStrategies.length} engines</span></summary>
+      <div class="strategy-grid">
+        ${availableStrategies.map((strategy) => strategyCard(strategy, recommendations.filter((item) => item.strategyId === strategy.id).length, automatic)).join("")}
+      </div>
+    </details>
 
     <article class="panel strategy-governance">
-      <strong>Third-party engines remain separate from Token Saver.</strong>
-      <p>They keep their own licenses, releases, and security boundaries. Token Saver decides when a fix is appropriate, requires approval where necessary, records rollback information, and verifies the result.</p>
+      <strong>Token Saver orchestrates external engines without hiding ownership.</strong>
+      <p>Each engine keeps its own license, release channel, and security boundary. Token Saver adds compatibility checks, user approval, routing policy, rollback context, and a shared Proof Ledger.</p>
       <small>${state.lastStrategyCheckAt ? `Last registry check: ${dateTime(state.lastStrategyCheckAt)}` : "Registry has not been checked in this workspace."}</small>
     </article>`;
 }
