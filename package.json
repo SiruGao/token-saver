@@ -1,7 +1,7 @@
 {
   "name": "token-saver-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Local-first desktop app for diagnosing and reducing AI-agent token waste.",
   "scripts": {
