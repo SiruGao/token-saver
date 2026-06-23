@@ -50,9 +50,7 @@ const app = appNode;
 const transcriptInput = transcriptNode;
 
 function initialProofStorage(): ProofStorageStatus {
-  if (isTauriRuntime()) {
-    return { mode: "initializing", detail: "Opening the local Proof Ledger database.", ready: false };
-  }
+  if (isTauriRuntime()) return { mode: "initializing", detail: "Opening the local Proof Ledger database.", ready: false };
   return { mode: "web-preview", detail: "Proof records use browser storage in Web Preview.", ready: true };
 }
 
@@ -81,11 +79,7 @@ let proofResetInProgress = false;
 const proofJournal = new ProofWriteJournal();
 
 function workspaceForBrowserStorage(value: WorkspaceState): WorkspaceState {
-  if (
-    value.proofStorage?.mode === "sqlite"
-    && value.proofStorage.ready
-    && proofJournal.isFullyPersisted()
-  ) {
+  if (value.proofStorage?.mode === "sqlite" && value.proofStorage.ready && proofJournal.isFullyPersisted()) {
     return { ...value, proofRecords: [] };
   }
   return value;
@@ -95,11 +89,7 @@ function markProofFallback(error: unknown): void {
   proofJournal.invalidate();
   state = hydrate({
     ...state,
-    proofStorage: {
-      mode: "fallback",
-      detail: `SQLite write failed; browser fallback is active: ${String(error)}`,
-      ready: true,
-    },
+    proofStorage: { mode: "fallback", detail: `SQLite write failed; browser fallback is active: ${String(error)}`, ready: true },
   });
   saveWorkspace(state);
   render();
@@ -119,13 +109,7 @@ function commit(next: WorkspaceState): void {
   const previousProofRecords = state.proofRecords;
   state = hydrate(next);
   const proofChanged = state.proofRecords !== previousProofRecords;
-
-  if (
-    proofChanged
-    && state.proofStorage?.mode === "sqlite"
-    && state.proofStorage.ready
-    && !proofResetInProgress
-  ) {
+  if (proofChanged && state.proofStorage?.mode === "sqlite" && state.proofStorage.ready && !proofResetInProgress) {
     saveWorkspace(state);
     scheduleProofPersistence();
   } else {
@@ -137,16 +121,11 @@ function commit(next: WorkspaceState): void {
 async function initializeProofPersistence(): Promise<void> {
   const result = await initializeProofLedger(state.proofRecords ?? []);
   const records = mergeProofRecords(state.proofRecords ?? [], result.records);
-
   if (result.mode === "sqlite") {
     try {
       await persistProofRecords(records);
       proofJournal.resetPersisted();
-      state = hydrate({
-        ...state,
-        proofRecords: records,
-        proofStorage: { mode: "sqlite", detail: result.detail, ready: true },
-      });
+      state = hydrate({ ...state, proofRecords: records, proofStorage: { mode: "sqlite", detail: result.detail, ready: true } });
       saveWorkspace(workspaceForBrowserStorage(state));
       render();
       return;
@@ -154,11 +133,7 @@ async function initializeProofPersistence(): Promise<void> {
       state = hydrate({
         ...state,
         proofRecords: records,
-        proofStorage: {
-          mode: "fallback",
-          detail: `SQLite migration write failed; browser fallback is active: ${String(error)}`,
-          ready: true,
-        },
+        proofStorage: { mode: "fallback", detail: `SQLite migration write failed; browser fallback is active: ${String(error)}`, ready: true },
       });
       saveWorkspace(state);
       render();
@@ -166,17 +141,10 @@ async function initializeProofPersistence(): Promise<void> {
       return;
     }
   }
-
-  state = hydrate({
-    ...state,
-    proofRecords: records,
-    proofStorage: { mode: result.mode, detail: result.detail, ready: true },
-  });
+  state = hydrate({ ...state, proofRecords: records, proofStorage: { mode: result.mode, detail: result.detail, ready: true } });
   saveWorkspace(state);
   render();
-  if (result.mode === "fallback") {
-    toast("SQLite was unavailable; Proof records remain in local workspace storage.", "error");
-  }
+  if (result.mode === "fallback") toast("SQLite was unavailable; Proof records remain in local workspace storage.", "error");
 }
 
 function currentView(): string {
@@ -200,10 +168,7 @@ function toast(message: string, tone: "success" | "error" | "info" = "info"): vo
 }
 
 async function importFiles(files: FileList | File[]): Promise<void> {
-  if (proofResetInProgress) {
-    toast("Wait for local data clearing to finish.");
-    return;
-  }
+  if (proofResetInProgress) return toast("Wait for local data clearing to finish.");
   const imported: AgentSession[] = [];
   for (const file of Array.from(files)) {
     try { imported.push(parseTranscript(await file.text(), file.name)); }
@@ -223,46 +188,35 @@ async function importFiles(files: FileList | File[]): Promise<void> {
 
 async function detectTools(): Promise<void> {
   try {
+    const firstRun = state.sessions.length === 0 && !state.lastScanAt;
     const detected = await detectNativeIntegrations();
     if (!detected.length) return toast("Tool detection requires the desktop application.");
     const integrations = state.integrations.map((item) => {
       const match = detected.find((candidate) => candidate.id === item.id);
       if (!match) return item;
-      return {
-        ...item,
-        detected: match.detected,
-        connected: match.detected ? item.connected : false,
-        path: match.path,
-        detail: match.detail,
-      };
+      return { ...item, detected: match.detected, connected: match.detected ? item.connected : false, path: match.path, detail: match.detail };
     });
     const found = integrations.filter((item) => item.detected).length;
+    if (firstRun && found) activeView = "strategies";
     commit({ ...state, integrations, lastScanAt: new Date().toISOString() });
     toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Setup remains off until you approve it.`, found ? "success" : "info");
     await refreshRtkAdapter(false);
   } catch (error) { toast(`Detection failed: ${String(error)}`, "error"); }
 }
 
-function mergeRtkStatus(status: RtkAdapterStatus): WorkspaceState {
+function mergeRtkStatus(status: RtkAdapterStatus, selected?: boolean): WorkspaceState {
   const checkedAt = new Date().toISOString();
-  const strategies = status.correctBinary
+  const runtimeStrategies = status.correctBinary
     ? applyRuntimeDetections(
         mergeStrategyRegistry(state.strategies),
-        [{
-          strategyId: "rtk",
-          detected: status.installed,
-          healthy: status.correctBinary,
-          version: status.version,
-          detail: status.detail,
-        }],
+        [{ strategyId: "rtk", detected: status.installed, healthy: status.correctBinary, version: status.version, detail: status.detail }],
         checkedAt,
       )
     : mergeStrategyRegistry(state.strategies);
-  return {
-    ...state,
-    strategies,
-    rtkAdapter: { ...status, checkedAt, busy: false, error: undefined },
-  };
+  const strategies = selected === undefined
+    ? runtimeStrategies
+    : runtimeStrategies.map((strategy) => strategy.id === "rtk" ? { ...strategy, enabled: selected } : strategy);
+  return { ...state, strategies, rtkAdapter: { ...status, checkedAt, busy: false, error: undefined } };
 }
 
 async function refreshRtkAdapter(show = true): Promise<void> {
@@ -297,29 +251,34 @@ async function refreshRtkAdapter(show = true): Promise<void> {
 }
 
 function markRtkBusy(): void {
-  if (!state.rtkAdapter) return;
-  commit({ ...state, rtkAdapter: { ...state.rtkAdapter, busy: true, error: undefined } });
+  if (state.rtkAdapter) commit({ ...state, rtkAdapter: { ...state.rtkAdapter, busy: true, error: undefined } });
 }
 
 async function installRtk(): Promise<void> {
   try {
     const preview = await previewRtkSetup();
+    const willConfigure = state.rtkAdapter?.claudeCodeDetected === true;
     const approved = window.confirm([
-      preview.title,
+      willConfigure ? "Install and enable command-output optimization" : "Install command-output optimization",
       "",
-      "Token Saver will download the official RTK installer, which verifies the release checksum before installation.",
-      "No Claude Code configuration is changed until the next approval step.",
+      "Token Saver will download the official RTK installer. The installer verifies the release checksum before installing the binary.",
+      willConfigure ? "It will then back up Claude Code settings and register the RTK hook." : "No AI client configuration will be changed.",
+      "",
+      `Source: ${preview.source}`,
       "",
       "Continue?",
     ].join("\n"));
     if (!approved) return;
     markRtkBusy();
-    const status = await installRtkAdapter();
-    commit(mergeRtkStatus(status));
-    toast("RTK installed and verified. Review the one-time Claude Code setup next.", "success");
+    let status = await installRtkAdapter();
+    if (status.canEnable && willConfigure) status = await enableRtkForClaude();
+    commit(mergeRtkStatus(status, status.configured ? true : undefined));
+    toast(status.configured
+      ? "RTK is installed and enabled. Restart Claude Code once to activate the hook."
+      : "RTK is installed and verified.", "success");
   } catch (error) {
     await refreshRtkAdapter(false);
-    toast(`RTK installation failed: ${String(error)}`, "error");
+    toast(`RTK setup failed: ${String(error)}`, "error");
   }
 }
 
@@ -331,9 +290,9 @@ async function enableRtk(): Promise<void> {
       "",
       preview.description,
       "",
-      ...preview.changes.map((change) => `• ${change}`),
+      ...preview.changes.slice(1).map((change) => `• ${change}`),
       "",
-      preview.reversible ? "This setup can be removed from Token Saver." : "This setup is not automatically reversible.",
+      preview.reversible ? "This setup can be removed from Token Saver." : "",
       preview.requiresRestart ? "Restart Claude Code after setup." : "",
       "",
       "Apply this setup?",
@@ -341,7 +300,7 @@ async function enableRtk(): Promise<void> {
     if (!approved) return;
     markRtkBusy();
     const status = await enableRtkForClaude();
-    commit(mergeRtkStatus(status));
+    commit(mergeRtkStatus(status, true));
     toast("RTK is enabled for Claude Code. Restart Claude Code once to activate the hook.", "success");
   } catch (error) {
     await refreshRtkAdapter(false);
@@ -354,7 +313,7 @@ async function disableRtk(): Promise<void> {
   try {
     markRtkBusy();
     const status = await disableRtkForClaude();
-    commit(mergeRtkStatus(status));
+    commit(mergeRtkStatus(status, false));
     toast("RTK was disconnected from Claude Code.", "success");
   } catch (error) {
     await refreshRtkAdapter(false);
@@ -375,11 +334,7 @@ async function refreshStrategyRuntimes(): Promise<void> {
   if (!isTauriRuntime()) return toast("Engine detection requires the desktop application.");
   try {
     const detected = await detectNativeStrategyRuntimes();
-    const strategies = applyRuntimeDetections(
-      mergeStrategyRegistry(state.strategies),
-      detected,
-      new Date().toISOString(),
-    );
+    const strategies = applyRuntimeDetections(mergeStrategyRegistry(state.strategies), detected, new Date().toISOString());
     commit({ ...state, strategies });
     await refreshRtkAdapter(false);
     const found = detected.filter((item) => item.detected).length;
@@ -406,9 +361,7 @@ async function refreshApp(show = true): Promise<void> {
         source: result.configured ? "signed-updater" : "github-release",
       },
     });
-    if (show) {
-      toast(result.available ? `Version ${result.version} is available.` : "Token Saver is current.", "success");
-    }
+    if (show) toast(result.available ? `Version ${result.version} is available.` : "Token Saver is current.", "success");
   } catch (error) { if (show) toast(`Update check failed: ${String(error)}`, "error"); }
 }
 
@@ -424,9 +377,7 @@ async function applyAvailableUpdate(): Promise<void> {
     if (!update.releaseUrl) throw new Error("No trusted release link is available.");
     await openReleasePage(update.releaseUrl);
     toast("Opened the GitHub Release in your system browser.", "success");
-  } catch (error) {
-    toast(`Could not apply the update: ${String(error)}`, "error");
-  }
+  } catch (error) { toast(`Could not apply the update: ${String(error)}`, "error"); }
 }
 
 function loadDemo(): void {
@@ -436,10 +387,7 @@ function loadDemo(): void {
   commit({ ...demo, proofRecords, proofStorage: state.proofStorage });
 }
 
-function updateBooleanSetting(
-  key: "autoCheckAppUpdates" | "autoCheckStrategyUpdates" | "autoScan",
-  value: boolean,
-): void {
+function updateBooleanSetting(key: "autoCheckAppUpdates" | "autoCheckStrategyUpdates" | "autoScan", value: boolean): void {
   commit({ ...state, settings: { ...state.settings, [key]: value } });
 }
 
@@ -478,7 +426,6 @@ async function clearAllData(): Promise<void> {
     toast(`Could not clear the SQLite Proof Ledger: ${String(error)}`, "error");
     return;
   }
-
   clearWorkspace();
   proofJournal.resetPersisted();
   const storage = state.proofStorage ?? initialProofStorage();
@@ -523,24 +470,14 @@ function bind(): void {
     const mode = item.dataset.optimizationMode;
     if (mode === "automatic" || mode === "manual") updateOptimizationMode(mode);
   }));
-  document.querySelector<HTMLInputElement>("#auto-app-updates")?.addEventListener("change", (event) => {
-    updateBooleanSetting("autoCheckAppUpdates", (event.currentTarget as HTMLInputElement).checked);
-  });
-  document.querySelector<HTMLInputElement>("#auto-strategy-updates")?.addEventListener("change", (event) => {
-    updateBooleanSetting("autoCheckStrategyUpdates", (event.currentTarget as HTMLInputElement).checked);
-  });
-  document.querySelector<HTMLInputElement>("#auto-scan")?.addEventListener("change", (event) => {
-    updateBooleanSetting("autoScan", (event.currentTarget as HTMLInputElement).checked);
-  });
-  document.querySelector<HTMLInputElement>("#large-output-threshold")?.addEventListener("change", (event) => {
-    updateLargeOutputThreshold((event.currentTarget as HTMLInputElement).value);
-  });
+  document.querySelector<HTMLInputElement>("#auto-app-updates")?.addEventListener("change", (event) => updateBooleanSetting("autoCheckAppUpdates", (event.currentTarget as HTMLInputElement).checked));
+  document.querySelector<HTMLInputElement>("#auto-strategy-updates")?.addEventListener("change", (event) => updateBooleanSetting("autoCheckStrategyUpdates", (event.currentTarget as HTMLInputElement).checked));
+  document.querySelector<HTMLInputElement>("#auto-scan")?.addEventListener("change", (event) => updateBooleanSetting("autoScan", (event.currentTarget as HTMLInputElement).checked));
+  document.querySelector<HTMLInputElement>("#large-output-threshold")?.addEventListener("change", (event) => updateLargeOutputThreshold((event.currentTarget as HTMLInputElement).value));
   document.querySelectorAll<HTMLElement>("[data-strategy-toggle]").forEach((item) => item.onclick = () => {
     const id = item.dataset.strategyToggle;
     if (!id) return;
-    commit({ ...state, strategies: mergeStrategyRegistry(state.strategies).map((strategy) =>
-      strategy.id === id ? { ...strategy, enabled: !strategy.enabled } : strategy,
-    ) });
+    commit({ ...state, strategies: mergeStrategyRegistry(state.strategies).map((strategy) => strategy.id === id ? { ...strategy, enabled: !strategy.enabled } : strategy) });
   });
 }
 
