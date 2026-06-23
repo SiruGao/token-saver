@@ -209,12 +209,21 @@ async function importFiles(files: FileList | File[]): Promise<void> {
 async function detectTools(): Promise<void> {
   try {
     const detected = await detectNativeIntegrations();
-    if (!detected.length) return toast("Desktop detection is unavailable in web preview.");
+    if (!detected.length) return toast("Tool detection requires the desktop application.");
     const integrations = state.integrations.map((item) => {
       const match = detected.find((candidate) => candidate.id === item.id);
-      return match ? { ...item, detected: match.detected, connected: match.detected, path: match.path, detail: match.detail } : item;
+      if (!match) return item;
+      return {
+        ...item,
+        detected: match.detected,
+        connected: match.detected ? item.connected : false,
+        path: match.path,
+        detail: match.detail,
+      };
     });
+    const found = integrations.filter((item) => item.detected).length;
     commit({ ...state, integrations, lastScanAt: new Date().toISOString() });
+    toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Detection did not grant conversation access.`, found ? "success" : "info");
   } catch (error) { toast(`Detection failed: ${String(error)}`, "error"); }
 }
 
@@ -223,7 +232,7 @@ async function refreshStrategies(show = true): Promise<void> {
     const strategies = await checkStrategyUpdates(mergeStrategyRegistry(state.strategies));
     const fixProposals = syncFixProposals(state.findings, strategies, state.fixProposals);
     commit({ ...state, strategies, fixProposals, lastStrategyCheckAt: new Date().toISOString() });
-    if (show) toast("Strategy registry refreshed.", "success");
+    if (show) toast("Fix registry refreshed.", "success");
   } catch (error) { if (show) toast(`Registry refresh failed: ${String(error)}`, "error"); }
 }
 
@@ -239,7 +248,7 @@ async function refreshStrategyRuntimes(): Promise<void> {
     commit({ ...state, strategies });
     const found = detected.filter((item) => item.detected).length;
     const healthy = detected.filter((item) => item.healthy).length;
-    toast(`Detected ${found} runtime${found === 1 ? "" : "s"}; ${healthy} healthy.`, healthy ? "success" : "info");
+    toast(`Detected ${found} local engine${found === 1 ? "" : "s"}; ${healthy} healthy.`, healthy ? "success" : "info");
   } catch (error) { toast(`Runtime detection failed: ${String(error)}`, "error"); }
 }
 
@@ -290,6 +299,27 @@ function loadDemo(): void {
   const demo = demoWorkspace();
   const proofRecords = syncBaselineRecords(demo.sessions, demo.findings, state.proofRecords);
   commit({ ...demo, proofRecords, proofStorage: state.proofStorage });
+}
+
+function updateBooleanSetting(
+  key: "autoCheckAppUpdates" | "autoCheckStrategyUpdates" | "autoScan",
+  value: boolean,
+): void {
+  commit({ ...state, settings: { ...state.settings, [key]: value } });
+}
+
+function updateLargeOutputThreshold(rawValue: string): void {
+  const threshold = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(threshold) || threshold < 100) {
+    toast("Large output threshold must be at least 100 tokens.", "error");
+    render();
+    return;
+  }
+  const settings = { ...state.settings, largeOutputThreshold: threshold };
+  const findings = analyzeSessions(state.sessions, threshold);
+  const fixProposals = syncFixProposals(findings, mergeStrategyRegistry(state.strategies), state.fixProposals);
+  commit({ ...state, settings, findings, fixProposals });
+  toast("Analysis threshold updated.", "success");
 }
 
 async function clearAllData(): Promise<void> {
@@ -343,6 +373,18 @@ function bind(): void {
   document.querySelector("#export-button")?.addEventListener("click", () => exportWorkspace(state));
   document.querySelector("#clear-button")?.addEventListener("click", () => {
     if (window.confirm("Remove imported data and the local Proof Ledger?")) void clearAllData();
+  });
+  document.querySelector<HTMLInputElement>("#auto-app-updates")?.addEventListener("change", (event) => {
+    updateBooleanSetting("autoCheckAppUpdates", (event.currentTarget as HTMLInputElement).checked);
+  });
+  document.querySelector<HTMLInputElement>("#auto-strategy-updates")?.addEventListener("change", (event) => {
+    updateBooleanSetting("autoCheckStrategyUpdates", (event.currentTarget as HTMLInputElement).checked);
+  });
+  document.querySelector<HTMLInputElement>("#auto-scan")?.addEventListener("change", (event) => {
+    updateBooleanSetting("autoScan", (event.currentTarget as HTMLInputElement).checked);
+  });
+  document.querySelector<HTMLInputElement>("#large-output-threshold")?.addEventListener("change", (event) => {
+    updateLargeOutputThreshold((event.currentTarget as HTMLInputElement).value);
   });
   document.querySelectorAll<HTMLElement>("[data-strategy-toggle]").forEach((item) => item.onclick = () => {
     const id = item.dataset.strategyToggle;
