@@ -36,7 +36,7 @@ export async function syncCodexHistory(limit = 120): Promise<NativeSessionFile[]
 
 export async function enableClaudeEventConnector(): Promise<ConnectorStatus> {
   requireDesktop();
-  return invoke<ConnectorStatus>("enable_claude_event_connector");
+  return invoke<ConnectorStatus>("enable_claude_event_connector_portable");
 }
 
 export async function disableClaudeEventConnector(): Promise<ConnectorStatus> {
