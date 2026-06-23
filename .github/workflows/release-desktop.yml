@@ -2,8 +2,11 @@ name: Release signed desktop updates
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+    paths:
+      - package.json
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -23,17 +26,32 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - id: version
+        name: Resolve release version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.version.outputs.exists != 'true'
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
       - uses: swatinem/rust-cache@v2
+        if: steps.version.outputs.exists != 'true'
         with:
           workspaces: src-tauri
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: steps.version.outputs.exists != 'true' && matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -47,8 +65,11 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
       - run: npm install
+        if: steps.version.outputs.exists != 'true'
       - run: npm run check
+        if: steps.version.outputs.exists != 'true'
       - uses: tauri-apps/tauri-action@v0
+        if: steps.version.outputs.exists != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -56,9 +77,10 @@ jobs:
           TOKEN_SAVER_UPDATER_PUBLIC_KEY: ${{ secrets.TOKEN_SAVER_UPDATER_PUBLIC_KEY }}
           APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Token Saver ${{ github.ref_name }}"
-          releaseBody: "Signed Token Saver desktop release. Existing signed builds can install this update from Settings."
+          tagName: v${{ steps.version.outputs.version }}
+          releaseName: Token Saver v${{ steps.version.outputs.version }}
+          releaseCommitish: ${{ github.sha }}
+          releaseBody: Signed Token Saver desktop release. Existing signed builds can install this update from Settings.
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true
