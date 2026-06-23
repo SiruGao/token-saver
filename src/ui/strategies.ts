@@ -25,7 +25,9 @@ function runtimeLabel(strategy: CompressionStrategy): string {
 function rtkPrimaryAction(status: RtkAdapterStatus | undefined): string {
   if (!status) return `<button class="button ghost" id="rtk-refresh">Check setup</button>`;
   if (status.busy) return `<button class="button primary" disabled>Working…</button>`;
-  if (!status.installed && status.canInstall) return `<button class="button primary" id="rtk-install">Install RTK</button>`;
+  if (!status.installed && status.canInstall) {
+    return `<button class="button primary" id="rtk-install">${status.claudeCodeDetected ? "Install and enable" : "Install RTK"}</button>`;
+  }
   if (status.canEnable) return `<button class="button primary" id="rtk-enable">Enable for Claude Code</button>`;
   if (status.canDisable) return `<button class="button ghost" id="rtk-disable">Disable</button>`;
   return `<button class="button ghost" id="rtk-refresh">Check again</button>`;
@@ -51,7 +53,9 @@ function rtkSetupCard(status: RtkAdapterStatus | undefined): string {
         ? "RTK is ready for one-time setup"
         : status.installed
           ? "A conflicting rtk executable was found"
-          : "Install command-output optimization";
+          : status.claudeCodeDetected
+            ? "Install and enable command-output optimization"
+            : "Install command-output optimization";
   const gain = status.gain;
   const stats = gain
     ? `<div class="rtk-gain-grid"><span><strong>${compactNumber(gain.totalSaved)}</strong><small>estimated tokens saved</small></span><span><strong>${gain.totalCommands}</strong><small>commands measured</small></span><span><strong>${percent(gain.avgSavingsPct / 100)}</strong><small>average reduction</small></span></div>`
