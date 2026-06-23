@@ -1,5 +1,7 @@
 import { efficiencyScore } from "../core/analyzer";
+import type { CodexSelectionPreview } from "../core/codex-selection";
 import type { AgentSession, Finding, Integration, ViewId, WorkspaceState } from "../types";
+import { codexSelectionView } from "./codex-selection";
 import { compactNumber, currency, dateTime, escapeHtml, percent } from "./format";
 
 export const NAV_ITEMS: Array<{ id: ViewId; label: string; icon: string }> = [
@@ -59,8 +61,12 @@ function integration(item: Integration): string {
   return `<article class="integration-card"><div class="integration-logo">${item.name.slice(0, 2).toUpperCase()}</div><div><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.detail)}</p></div><div class="integration-state ${item.detected ? "detected" : ""}"><span></span>${item.detected ? "Detected" : "Not detected"}</div></article>`;
 }
 
-export function integrationsView(state: WorkspaceState): string {
-  return `<div class="integration-hero"><div><span class="eyebrow">READ-ONLY DETECTION</span><h2>${state.integrations.filter((item) => item.detected).length} tools detected</h2><p>Token Saver checks directory existence only.</p></div><button class="button primary" id="integration-scan">Rescan</button></div><div class="integration-grid">${state.integrations.map(integration).join("")}</div>`;
+export function integrationsView(
+  state: WorkspaceState,
+  codexPreview?: CodexSelectionPreview,
+  codexBusy = false,
+): string {
+  return `<div class="integration-hero"><div><span class="eyebrow">READ-ONLY DETECTION</span><h2>${state.integrations.filter((item) => item.detected).length} tools detected</h2><p>Installation detection checks directory existence only. Conversation content requires explicit selection and confirmation.</p></div><button class="button primary" id="integration-scan">Rescan</button></div>${codexSelectionView(codexPreview, codexBusy)}<div class="integration-grid">${state.integrations.map(integration).join("")}</div>`;
 }
 
 function toggle(id: string, checked: boolean): string {
