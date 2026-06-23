@@ -1,6 +1,13 @@
 import "./styles.css";
 import "./strategy.css";
 import { analyzeSessions, parseTranscript } from "./core/import-router";
+import {
+  disableRtkForClaude,
+  enableRtkForClaude,
+  inspectRtkAdapter,
+  installRtkAdapter,
+  previewRtkSetup,
+} from "./core/rtk";
 import { clearWorkspace, exportWorkspace, loadWorkspace, saveWorkspace } from "./core/store";
 import {
   checkNativeAppUpdate,
@@ -24,7 +31,14 @@ import { ProofWriteJournal } from "./proof/write-journal";
 import { mergeStrategyRegistry } from "./strategies/registry";
 import { applyRuntimeDetections } from "./strategies/runtime";
 import { checkStrategyUpdates } from "./strategies/updates";
-import type { AgentSession, OptimizationMode, ProofStorageStatus, ViewId, WorkspaceState } from "./types";
+import type {
+  AgentSession,
+  OptimizationMode,
+  ProofStorageStatus,
+  RtkAdapterStatus,
+  ViewId,
+  WorkspaceState,
+} from "./types";
 import { proofView } from "./ui/proof";
 import { strategiesView } from "./ui/strategies";
 import { dashboardView, doctorView, integrationsView, sessionsView, settingsView, shell } from "./ui/templates";
@@ -225,7 +239,127 @@ async function detectTools(): Promise<void> {
     const found = integrations.filter((item) => item.detected).length;
     commit({ ...state, integrations, lastScanAt: new Date().toISOString() });
     toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Setup remains off until you approve it.`, found ? "success" : "info");
+    await refreshRtkAdapter(false);
   } catch (error) { toast(`Detection failed: ${String(error)}`, "error"); }
+}
+
+function mergeRtkStatus(status: RtkAdapterStatus): WorkspaceState {
+  const checkedAt = new Date().toISOString();
+  const strategies = status.correctBinary
+    ? applyRuntimeDetections(
+        mergeStrategyRegistry(state.strategies),
+        [{
+          strategyId: "rtk",
+          detected: status.installed,
+          healthy: status.correctBinary,
+          version: status.version,
+          detail: status.detail,
+        }],
+        checkedAt,
+      )
+    : mergeStrategyRegistry(state.strategies);
+  return {
+    ...state,
+    strategies,
+    rtkAdapter: { ...status, checkedAt, busy: false, error: undefined },
+  };
+}
+
+async function refreshRtkAdapter(show = true): Promise<void> {
+  if (!isTauriRuntime()) return;
+  try {
+    const status = await inspectRtkAdapter();
+    if (!status) return;
+    commit(mergeRtkStatus(status));
+    if (show) toast("RTK setup and savings refreshed.", "success");
+  } catch (error) {
+    commit({
+      ...state,
+      rtkAdapter: {
+        ...(state.rtkAdapter ?? {
+          installed: false,
+          correctBinary: false,
+          configured: false,
+          claudeCodeDetected: false,
+          canInstall: false,
+          canEnable: false,
+          canDisable: false,
+          detail: "RTK adapter could not be inspected.",
+          setupDetail: "Try again from the desktop application.",
+        }),
+        busy: false,
+        error: String(error),
+        checkedAt: new Date().toISOString(),
+      },
+    });
+    if (show) toast(`RTK check failed: ${String(error)}`, "error");
+  }
+}
+
+function markRtkBusy(): void {
+  if (!state.rtkAdapter) return;
+  commit({ ...state, rtkAdapter: { ...state.rtkAdapter, busy: true, error: undefined } });
+}
+
+async function installRtk(): Promise<void> {
+  try {
+    const preview = await previewRtkSetup();
+    const approved = window.confirm([
+      preview.title,
+      "",
+      "Token Saver will download the official RTK installer, which verifies the release checksum before installation.",
+      "No Claude Code configuration is changed until the next approval step.",
+      "",
+      "Continue?",
+    ].join("\n"));
+    if (!approved) return;
+    markRtkBusy();
+    const status = await installRtkAdapter();
+    commit(mergeRtkStatus(status));
+    toast("RTK installed and verified. Review the one-time Claude Code setup next.", "success");
+  } catch (error) {
+    await refreshRtkAdapter(false);
+    toast(`RTK installation failed: ${String(error)}`, "error");
+  }
+}
+
+async function enableRtk(): Promise<void> {
+  try {
+    const preview = await previewRtkSetup();
+    const approved = window.confirm([
+      preview.title,
+      "",
+      preview.description,
+      "",
+      ...preview.changes.map((change) => `• ${change}`),
+      "",
+      preview.reversible ? "This setup can be removed from Token Saver." : "This setup is not automatically reversible.",
+      preview.requiresRestart ? "Restart Claude Code after setup." : "",
+      "",
+      "Apply this setup?",
+    ].filter(Boolean).join("\n"));
+    if (!approved) return;
+    markRtkBusy();
+    const status = await enableRtkForClaude();
+    commit(mergeRtkStatus(status));
+    toast("RTK is enabled for Claude Code. Restart Claude Code once to activate the hook.", "success");
+  } catch (error) {
+    await refreshRtkAdapter(false);
+    toast(`RTK setup failed: ${String(error)}`, "error");
+  }
+}
+
+async function disableRtk(): Promise<void> {
+  if (!window.confirm("Disable RTK for Claude Code and remove its global hook registration? The RTK binary and savings history will remain installed.")) return;
+  try {
+    markRtkBusy();
+    const status = await disableRtkForClaude();
+    commit(mergeRtkStatus(status));
+    toast("RTK was disconnected from Claude Code.", "success");
+  } catch (error) {
+    await refreshRtkAdapter(false);
+    toast(`RTK removal failed: ${String(error)}`, "error");
+  }
 }
 
 async function refreshStrategies(show = true): Promise<void> {
@@ -247,6 +381,7 @@ async function refreshStrategyRuntimes(): Promise<void> {
       new Date().toISOString(),
     );
     commit({ ...state, strategies });
+    await refreshRtkAdapter(false);
     const found = detected.filter((item) => item.detected).length;
     const ready = detected.filter((item) => item.healthy).length;
     toast(`Found ${found} local engine${found === 1 ? "" : "s"}; ${ready} ready to use.`, ready ? "success" : "info");
@@ -280,7 +415,6 @@ async function refreshApp(show = true): Promise<void> {
 async function applyAvailableUpdate(): Promise<void> {
   const update = state.appUpdate;
   if (!update?.available) return toast("No application update is currently available.", "error");
-
   try {
     if (update.source === "signed-updater" && isTauriRuntime()) {
       toast("Downloading and verifying the signed update…");
@@ -334,7 +468,6 @@ async function clearAllData(): Promise<void> {
   if (proofResetInProgress) return;
   proofResetInProgress = true;
   proofJournal.invalidate();
-
   try {
     await proofJournal.drain();
     if (state.proofStorage?.mode === "sqlite") await clearProofRecords();
@@ -374,6 +507,10 @@ function bind(): void {
   ["#scan-button", "#empty-scan", "#integration-scan"].forEach((selector) => document.querySelector<HTMLElement>(selector)?.addEventListener("click", () => void detectTools()));
   document.querySelector("#strategy-update-button")?.addEventListener("click", () => void refreshStrategies());
   document.querySelector("#strategy-runtime-check")?.addEventListener("click", () => void refreshStrategyRuntimes());
+  document.querySelector("#rtk-refresh")?.addEventListener("click", () => void refreshRtkAdapter());
+  document.querySelector("#rtk-install")?.addEventListener("click", () => void installRtk());
+  document.querySelector("#rtk-enable")?.addEventListener("click", () => void enableRtk());
+  document.querySelector("#rtk-disable")?.addEventListener("click", () => void disableRtk());
   document.querySelector("#app-update-check")?.addEventListener("click", () => void refreshApp());
   document.querySelector("#app-update-open")?.addEventListener("click", () => void applyAvailableUpdate());
   document.querySelector("#demo-button")?.addEventListener("click", loadDemo);
@@ -421,6 +558,7 @@ window.ondrop = async (event) => {
 
 render();
 void initializeProofPersistence();
+if (isTauriRuntime()) void refreshRtkAdapter(false);
 if (state.settings.autoScan && isTauriRuntime() && !state.lastScanAt) void detectTools();
 if (state.settings.autoCheckStrategyUpdates !== false && !state.lastStrategyCheckAt) void refreshStrategies(false);
 if (state.settings.autoCheckAppUpdates !== false && !state.appUpdate?.checkedAt) void refreshApp(false);
