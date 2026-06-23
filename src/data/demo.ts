@@ -80,11 +80,11 @@ const otherSessions: AgentSession[] = [
 
 export const defaultIntegrations: Integration[] = [
   { id: "claude-code", name: "Claude Code", detected: false, connected: false, detail: "Transcript analysis and hook adapter" },
-  { id: "codex", name: "OpenAI Codex", detected: false, connected: false, detail: "Session analysis and Responses API adapter" },
+  { id: "codex", name: "OpenAI Codex", detected: false, connected: false, detail: "Session analysis and app-server adapter" },
   { id: "openclaw", name: "OpenClaw", detected: false, connected: false, detail: "Skill and runtime integration" },
   { id: "hermes", name: "Hermes Agent", detected: false, connected: false, detail: "Session and plugin adapter" },
   { id: "opencode", name: "OpenCode", detected: false, connected: false, detail: "Usage and session adapter" },
-  { id: "cursor", name: "Cursor", detected: false, connected: false, detail: "Planned local proxy adapter" },
+  { id: "cursor", name: "Cursor", detected: false, connected: false, detail: "Extension and local connector" },
 ];
 
 export function demoWorkspace(): WorkspaceState {
@@ -100,10 +100,13 @@ export function demoWorkspace(): WorkspaceState {
       path: index < 3 ? `~/.${item.id}` : undefined,
     })),
     settings: {
-      theme: "dark",
+      theme: "light",
       localOnly: true,
       telemetry: false,
       autoScan: true,
+      optimizationMode: "automatic",
+      autoCheckStrategyUpdates: true,
+      autoCheckAppUpdates: true,
       largeOutputThreshold: 4000,
       repeatedReadWindowMinutes: 30,
     },
@@ -118,10 +121,13 @@ export function emptyWorkspace(): WorkspaceState {
     findings: [],
     integrations: defaultIntegrations,
     settings: {
-      theme: "dark",
+      theme: "light",
       localOnly: true,
       telemetry: false,
       autoScan: true,
+      optimizationMode: "automatic",
+      autoCheckStrategyUpdates: true,
+      autoCheckAppUpdates: true,
       largeOutputThreshold: 4000,
       repeatedReadWindowMinutes: 30,
     },
