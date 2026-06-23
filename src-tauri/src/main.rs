@@ -2,6 +2,7 @@
 
 mod app_updates;
 mod proof_db;
+mod rtk_adapter;
 
 use serde::Serialize;
 use std::{env, io::ErrorKind, path::PathBuf, process::Command};
@@ -194,6 +195,12 @@ fn main() {
             scan_local_sessions,
             detect_strategy_runtimes,
             open_release_url,
+            rtk_adapter::inspect_rtk_adapter,
+            rtk_adapter::preview_rtk_setup,
+            rtk_adapter::install_rtk_adapter,
+            rtk_adapter::enable_rtk_for_claude,
+            rtk_adapter::disable_rtk_for_claude,
+            rtk_adapter::read_rtk_gain,
             app_updates::check_app_update,
             app_updates::install_app_update
         ])
