@@ -24,7 +24,7 @@ import { ProofWriteJournal } from "./proof/write-journal";
 import { mergeStrategyRegistry } from "./strategies/registry";
 import { applyRuntimeDetections } from "./strategies/runtime";
 import { checkStrategyUpdates } from "./strategies/updates";
-import type { AgentSession, ProofStorageStatus, ViewId, WorkspaceState } from "./types";
+import type { AgentSession, OptimizationMode, ProofStorageStatus, ViewId, WorkspaceState } from "./types";
 import { proofView } from "./ui/proof";
 import { strategiesView } from "./ui/strategies";
 import { dashboardView, doctorView, integrationsView, sessionsView, settingsView, shell } from "./ui/templates";
@@ -52,6 +52,7 @@ function hydrate(value: WorkspaceState): WorkspaceState {
     fixProposals: syncFixProposals(value.findings, strategies, value.fixProposals),
     settings: {
       ...value.settings,
+      optimizationMode: value.settings.optimizationMode ?? "automatic",
       autoCheckAppUpdates: value.settings.autoCheckAppUpdates ?? true,
       autoCheckStrategyUpdates: value.settings.autoCheckStrategyUpdates ?? true,
     },
@@ -223,7 +224,7 @@ async function detectTools(): Promise<void> {
     });
     const found = integrations.filter((item) => item.detected).length;
     commit({ ...state, integrations, lastScanAt: new Date().toISOString() });
-    toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Detection did not grant conversation access.`, found ? "success" : "info");
+    toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Setup remains off until you approve it.`, found ? "success" : "info");
   } catch (error) { toast(`Detection failed: ${String(error)}`, "error"); }
 }
 
@@ -232,12 +233,12 @@ async function refreshStrategies(show = true): Promise<void> {
     const strategies = await checkStrategyUpdates(mergeStrategyRegistry(state.strategies));
     const fixProposals = syncFixProposals(state.findings, strategies, state.fixProposals);
     commit({ ...state, strategies, fixProposals, lastStrategyCheckAt: new Date().toISOString() });
-    if (show) toast("Fix registry refreshed.", "success");
+    if (show) toast("Strategy registry refreshed.", "success");
   } catch (error) { if (show) toast(`Registry refresh failed: ${String(error)}`, "error"); }
 }
 
 async function refreshStrategyRuntimes(): Promise<void> {
-  if (!isTauriRuntime()) return toast("Runtime detection requires the desktop application.");
+  if (!isTauriRuntime()) return toast("Engine detection requires the desktop application.");
   try {
     const detected = await detectNativeStrategyRuntimes();
     const strategies = applyRuntimeDetections(
@@ -247,9 +248,9 @@ async function refreshStrategyRuntimes(): Promise<void> {
     );
     commit({ ...state, strategies });
     const found = detected.filter((item) => item.detected).length;
-    const healthy = detected.filter((item) => item.healthy).length;
-    toast(`Detected ${found} local engine${found === 1 ? "" : "s"}; ${healthy} healthy.`, healthy ? "success" : "info");
-  } catch (error) { toast(`Runtime detection failed: ${String(error)}`, "error"); }
+    const ready = detected.filter((item) => item.healthy).length;
+    toast(`Found ${found} local engine${found === 1 ? "" : "s"}; ${ready} ready to use.`, ready ? "success" : "info");
+  } catch (error) { toast(`Engine detection failed: ${String(error)}`, "error"); }
 }
 
 async function refreshApp(show = true): Promise<void> {
@@ -306,6 +307,13 @@ function updateBooleanSetting(
   value: boolean,
 ): void {
   commit({ ...state, settings: { ...state.settings, [key]: value } });
+}
+
+function updateOptimizationMode(mode: OptimizationMode): void {
+  commit({ ...state, settings: { ...state.settings, optimizationMode: mode } });
+  toast(mode === "automatic"
+    ? "Automatic routing enabled. Token Saver will prefer compatible low-risk strategies."
+    : "Manual control enabled. Strategy choices will remain under your control.", "success");
 }
 
 function updateLargeOutputThreshold(rawValue: string): void {
@@ -374,6 +382,10 @@ function bind(): void {
   document.querySelector("#clear-button")?.addEventListener("click", () => {
     if (window.confirm("Remove imported data and the local Proof Ledger?")) void clearAllData();
   });
+  document.querySelectorAll<HTMLElement>("[data-optimization-mode]").forEach((item) => item.addEventListener("click", () => {
+    const mode = item.dataset.optimizationMode;
+    if (mode === "automatic" || mode === "manual") updateOptimizationMode(mode);
+  }));
   document.querySelector<HTMLInputElement>("#auto-app-updates")?.addEventListener("change", (event) => {
     updateBooleanSetting("autoCheckAppUpdates", (event.currentTarget as HTMLInputElement).checked);
   });
