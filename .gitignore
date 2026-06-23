@@ -3,6 +3,7 @@ dist/
 .DS_Store
 *.log
 src-tauri/target/
+src-tauri/tauri.release.conf.json
 .env
 .env.*
 !.env.example
