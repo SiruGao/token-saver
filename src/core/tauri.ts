@@ -1,10 +1,13 @@
 import type { NativeIntegration, NativeSessionFile } from "../types";
 
 export interface NativeAppUpdate {
-  version: string;
+  configured: boolean;
+  available: boolean;
+  version?: string;
   currentVersion: string;
   releaseUrl?: string;
   publishedAt?: string;
+  notes?: string;
 }
 
 export interface NativeStrategyRuntime {
@@ -80,31 +83,53 @@ export async function detectNativeStrategyRuntimes(): Promise<NativeStrategyRunt
   return invoke<NativeStrategyRuntime[]>("detect_strategy_runtimes");
 }
 
-export async function checkNativeAppUpdate(): Promise<NativeAppUpdate | null> {
+async function checkWebPreviewUpdate(): Promise<NativeAppUpdate> {
   const currentVersion = await currentAppVersion();
   const response = await fetch(LATEST_RELEASE, {
     cache: "no-store",
     headers: { Accept: "application/vnd.github+json" },
   });
-  if (response.status === 404) return null;
+  if (response.status === 404) {
+    return { configured: false, available: false, currentVersion };
+  }
   if (!response.ok) throw new Error(`GitHub release check failed with ${response.status}`);
   const release = await response.json() as {
     tag_name?: string;
     html_url?: string;
     published_at?: string;
+    body?: string;
     draft?: boolean;
   };
   const version = release.tag_name?.replace(/^v/, "");
-  if (!version || release.draft || !isNewerVersion(version, currentVersion)) return null;
-  if (!release.html_url || !isTrustedReleaseUrl(release.html_url)) {
+  const available = Boolean(
+    version
+    && !release.draft
+    && isNewerVersion(version, currentVersion),
+  );
+  if (release.html_url && !isTrustedReleaseUrl(release.html_url)) {
     throw new Error("GitHub returned an untrusted release URL");
   }
   return {
-    version,
+    configured: false,
+    available,
+    version: available ? version : undefined,
     currentVersion,
-    releaseUrl: release.html_url,
-    publishedAt: release.published_at,
+    releaseUrl: available ? release.html_url : undefined,
+    publishedAt: available ? release.published_at : undefined,
+    notes: available ? release.body : undefined,
   };
+}
+
+export async function checkNativeAppUpdate(): Promise<NativeAppUpdate> {
+  if (!isTauriRuntime()) return checkWebPreviewUpdate();
+  return invoke<NativeAppUpdate>("check_app_update");
+}
+
+export async function installNativeAppUpdate(): Promise<void> {
+  if (!isTauriRuntime()) {
+    throw new Error("Signed installation requires the desktop application.");
+  }
+  await invoke<void>("install_app_update");
 }
 
 export async function openReleasePage(url: string): Promise<void> {
