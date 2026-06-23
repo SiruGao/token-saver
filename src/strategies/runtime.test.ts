@@ -1,6 +1,7 @@
 // @ts-nocheck
 import assert from "node:assert/strict";
 import test from "node:test";
+import { buildStrategyRoutePlan } from "./policy";
 import { strategyRegistry } from "./registry";
 import { applyRuntimeDetections } from "./runtime";
 
@@ -32,4 +33,29 @@ test("detected but unhealthy RTK is never marked installed", () => {
   assert.equal(rtk.runtimeDetected, true);
   assert.equal(rtk.runtimeHealthy, false);
   assert.notEqual(rtk.state, "installed");
+});
+
+test("automatic routing only chooses compatible low-risk selections", () => {
+  const finding = {
+    id: "f1",
+    type: "large-tool-output",
+    severity: "high",
+    title: "Large output",
+    description: "Verbose output",
+    evidence: "Large output observed",
+    estimatedTokens: 8000,
+    recommendation: "Filter output",
+  };
+  const integration = {
+    id: "codex",
+    name: "OpenAI Codex",
+    detected: true,
+    connected: true,
+    detail: "Connected",
+  };
+  const rtk = { ...strategyRegistry.find((item) => item.id === "rtk"), enabled: true };
+  const automatic = buildStrategyRoutePlan([finding], [rtk], [integration], "automatic");
+  const reviewed = buildStrategyRoutePlan([finding], [{ ...rtk, risk: "medium" }], [integration], "automatic");
+  assert.equal(automatic[0].decision, "automatic");
+  assert.equal(reviewed[0].decision, "review");
 });
