@@ -176,6 +176,9 @@ fn main() {
         )
         .setup(|app| {
             app.handle().plugin(app_updates::plugin())?;
+            if let Err(error) = tool_result_isolator::refresh_installed_helper() {
+                eprintln!("Token Saver could not refresh the installed hook helper: {error}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
