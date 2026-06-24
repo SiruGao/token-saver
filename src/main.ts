@@ -2,6 +2,7 @@ import "./styles.css";
 import "./strategy.css";
 import "./ui/connectors.css";
 import { createConnectorRuntime } from "./core/connector-runtime";
+import { createHeadroomRuntime } from "./core/headroom-runtime";
 import { analyzeSessions, parseTranscript } from "./core/import-router";
 import { createIsolationRuntime } from "./core/isolation-runtime";
 import {
@@ -175,6 +176,7 @@ function toast(message: string, tone: "success" | "error" | "info" = "info"): vo
 
 const connectorRuntime = createConnectorRuntime({ getState: () => state, commit, toast });
 const isolationRuntime = createIsolationRuntime({ getState: () => state, commit, toast });
+const headroomRuntime = createHeadroomRuntime({ getState: () => state, commit, toast });
 
 function mergeImportedSessions(imported: AgentSession[]): void {
   if (!imported.length) return;
@@ -216,6 +218,7 @@ async function detectTools(): Promise<void> {
     await connectorRuntime.refreshStatuses(false);
     await refreshRtkAdapter(false);
     await isolationRuntime.refresh(false);
+    await headroomRuntime.refresh(false);
     toast(`Found ${found} supported tool${found === 1 ? "" : "s"}. Access remains off until you approve it.`, found ? "success" : "info");
   } catch (error) {
     toast(`Detection failed: ${String(error)}`, "error");
@@ -358,8 +361,11 @@ async function refreshStrategyRuntimes(): Promise<void> {
     commit({ ...state, strategies });
     await refreshRtkAdapter(false);
     await isolationRuntime.refresh(false);
-    const found = detected.filter((item) => item.detected).length;
-    const ready = detected.filter((item) => item.healthy).length + (state.toolResultIsolation?.enabled ? 1 : 0);
+    await headroomRuntime.refresh(false);
+    const found = detected.filter((item) => item.detected).length + (state.headroomAdapter?.installed ? 1 : 0);
+    const ready = detected.filter((item) => item.healthy).length
+      + (state.toolResultIsolation?.enabled ? 1 : 0)
+      + (state.headroomAdapter?.active ? 1 : 0);
     toast(`Found ${found} external engine${found === 1 ? "" : "s"}; ${ready} total optimization${ready === 1 ? "" : "s"} ready.`, ready ? "success" : "info");
   } catch (error) {
     toast(`Engine detection failed: ${String(error)}`, "error");
@@ -512,6 +518,7 @@ function bind(): void {
   });
   connectorRuntime.bind();
   isolationRuntime.bind();
+  headroomRuntime.bind();
 }
 
 function render(): void {
@@ -533,6 +540,7 @@ async function startDesktopFeatures(): Promise<void> {
   await connectorRuntime.start();
   await refreshRtkAdapter(false);
   await isolationRuntime.refresh(false);
+  await headroomRuntime.refresh(false);
   if (state.settings.autoScan && !state.lastScanAt) await detectTools();
 }
 
