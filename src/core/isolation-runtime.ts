@@ -1,4 +1,5 @@
 import {
+  clearToolResultVault,
   disableToolResultIsolation,
   enableToolResultIsolation,
   inspectToolResultIsolation,
@@ -9,6 +10,12 @@ export interface IsolationRuntimeHost {
   getState(): WorkspaceState;
   commit(next: WorkspaceState): void;
   toast(message: string, tone?: "success" | "error" | "info"): void;
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MiB`;
 }
 
 export function createIsolationRuntime(host: IsolationRuntimeHost) {
@@ -51,7 +58,7 @@ export function createIsolationRuntime(host: IsolationRuntimeHost) {
     const approved = window.confirm([
       "Enable large tool-result isolation?",
       "",
-      "Token Saver will back up ~/.claude/settings.json and add one reversible synchronous PostToolUse hook.",
+      "Token Saver will back up ~/.claude/settings.json, install a stable local helper, and add one reversible synchronous PostToolUse hook.",
       "",
       "When a supported result is very large, the complete JSON output is stored under ~/.token-saver/vault. Claude receives the same JSON shape with oversized text fields replaced by head/tail previews and a local retrieval path.",
       "",
@@ -74,7 +81,7 @@ export function createIsolationRuntime(host: IsolationRuntimeHost) {
   }
 
   async function disable(): Promise<void> {
-    if (!window.confirm("Disable tool-result isolation? Existing local vault files and statistics will remain until local data is cleared.")) return;
+    if (!window.confirm("Disable tool-result isolation? Existing local vault files and statistics will remain until you clear them separately.")) return;
     const current = host.getState().toolResultIsolation;
     if (current) {
       host.commit({ ...host.getState(), toolResultIsolation: { ...current, busy: true, error: undefined } });
@@ -88,11 +95,36 @@ export function createIsolationRuntime(host: IsolationRuntimeHost) {
     }
   }
 
+  async function clearVault(): Promise<void> {
+    const approved = window.confirm([
+      "Clear stored full tool results?",
+      "",
+      "This permanently deletes complete results under ~/.token-saver/vault/claude-code.",
+      "The strategy remains enabled, Claude Code settings are not changed, and measured statistics remain in the local event log.",
+      "",
+      "Continue?",
+    ].join("\n"));
+    if (!approved) return;
+
+    try {
+      const result = await clearToolResultVault();
+      host.toast(
+        result.clearedFiles
+          ? `Cleared ${result.clearedFiles} vault file${result.clearedFiles === 1 ? "" : "s"} (${formatBytes(result.clearedBytes)}).`
+          : "The local tool-result vault was already empty.",
+        "success",
+      );
+    } catch (error) {
+      host.toast(`Could not clear the local result vault: ${String(error)}`, "error");
+    }
+  }
+
   function bind(): void {
     document.querySelector("#isolation-refresh")?.addEventListener("click", () => void refresh(true));
     document.querySelector("#isolation-enable")?.addEventListener("click", () => void enable());
     document.querySelector("#isolation-disable")?.addEventListener("click", () => void disable());
+    document.querySelector("#isolation-clear-vault")?.addEventListener("click", () => void clearVault());
   }
 
-  return { bind, disable, enable, refresh };
+  return { bind, clearVault, disable, enable, refresh };
 }
