@@ -66,6 +66,8 @@ The first hardened runtime uses conservative defaults:
 
 Expired files are removed before new results are stored. Oldest files are removed when space is needed. If the runtime cannot safely store the complete result, it produces no replacement and Claude Code receives the original result.
 
+The Strategy Hub exposes a separate **Clear vault** action. It deletes stored full results without disabling the strategy, changing Claude Code settings, or deleting measured event history.
+
 ## Evidence model
 
 The following values are directly measured:
@@ -95,6 +97,7 @@ This remains an **Estimated** metric. It is not Anthropic billing data and is no
 - Enable, refresh, migration, and disable are designed to be idempotent.
 - Disable removes only handlers carrying Token Saver's unique headless argument and removes the installed helper; existing vault files and statistics remain until the user clears local strategy data.
 - Canonical path checks prevent vault reads from being isolated again.
+- Vault clearing does not follow directory symlinks and does not change connector or strategy authorization.
 
 ## Relationship to other modules
 
