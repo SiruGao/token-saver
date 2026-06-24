@@ -4,9 +4,11 @@ mod agent_connectors;
 mod app_updates;
 mod claude_collector;
 mod codex_output_optimizer;
+mod headroom_adapter;
 mod proof_db;
 mod rtk_adapter;
 mod rtk_installer;
+mod strategy_adapter;
 mod tool_result_isolator;
 mod tool_result_vault;
 
@@ -209,6 +211,11 @@ fn main() {
             codex_output_optimizer::inspect_codex_output_optimization,
             codex_output_optimizer::enable_codex_output_optimization,
             codex_output_optimizer::disable_codex_output_optimization,
+            headroom_adapter::inspect_headroom_adapter,
+            headroom_adapter::preview_headroom_setup,
+            headroom_adapter::install_headroom_adapter,
+            headroom_adapter::apply_headroom_adapter,
+            headroom_adapter::remove_headroom_adapter,
             tool_result_isolator::inspect_tool_result_isolation,
             tool_result_isolator::enable_tool_result_isolation,
             tool_result_isolator::disable_tool_result_isolation,
