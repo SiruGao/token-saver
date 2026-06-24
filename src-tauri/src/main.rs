@@ -7,6 +7,7 @@ mod proof_db;
 mod rtk_adapter;
 mod rtk_installer;
 mod tool_result_isolator;
+mod tool_result_vault;
 
 use serde::Serialize;
 use std::{env, io::ErrorKind, path::PathBuf, process::Command};
@@ -197,6 +198,7 @@ fn main() {
             tool_result_isolator::inspect_tool_result_isolation,
             tool_result_isolator::enable_tool_result_isolation,
             tool_result_isolator::disable_tool_result_isolation,
+            tool_result_vault::clear_tool_result_vault,
             rtk_adapter::inspect_rtk_adapter,
             rtk_adapter::preview_rtk_setup,
             rtk_adapter::install_rtk_adapter,
