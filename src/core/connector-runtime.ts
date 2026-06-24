@@ -14,6 +14,11 @@ import type {
   WorkspaceState,
 } from "../types";
 import {
+  disableCodexOutputOptimization,
+  enableCodexOutputOptimization,
+  inspectCodexOutputOptimization,
+} from "./codex-optimization";
+import {
   acknowledgeClaudeHookEvents,
   disableClaudeEventConnector,
   disableCodexHistoryConnector,
@@ -326,6 +331,15 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
     return imported;
   }
 
+  async function activateCodexReduction() {
+    const codexDetected = host.getState().integrations.some((item) => item.id === "codex" && item.detected);
+    if (!codexDetected) return undefined;
+    let status = await inspectCodexOutputOptimization();
+    if (!status) return undefined;
+    if (!status.enabled) status = await enableCodexOutputOptimization();
+    return status;
+  }
+
   async function connect(id: AgentId): Promise<void> {
     const status = statusFor(host.getState(), id);
     if (!status?.detected) {
@@ -335,11 +349,13 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
 
     const approved = id === "codex"
       ? window.confirm([
-          "Connect Codex local history?",
+          "Connect and optimize Codex?",
           "",
-          "Token Saver will read rollout JSONL files under ~/.codex to import completed and in-progress session history and persisted token usage.",
+          "Token Saver will read local rollout history and install one reversible Codex PostToolUse hook.",
           "",
-          "It will not modify Codex configuration, credentials, prompts, or sessions. This is local history sync, not live control of the Codex app.",
+          "For oversized supported Bash and MCP results, the complete output stays in a local vault while Codex receives a bounded preview before its next model step.",
+          "",
+          "Codex may require one review in /hooks before first execution. Credentials and prompts are not uploaded.",
           "",
           "Continue?",
         ].join("\n"))
@@ -357,7 +373,15 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
     if (!approved) return;
 
     try {
-      await authorize(id);
+      await authorize(id, false);
+      if (id === "codex") {
+        const optimization = await activateCodexReduction();
+        host.toast(optimization?.trustReviewRequired
+          ? "Codex is connected and output reduction is installed. Open /hooks in Codex once to trust the new hook."
+          : "Codex is connected and active output reduction is ready.", optimization?.trustReviewRequired ? "info" : "success");
+      } else {
+        host.toast("Claude Code is connected and automatic sync is active.", "success");
+      }
     } catch (error) {
       host.toast(`${id === "codex" ? "Codex" : "Claude Code"} connection failed: ${String(error)}`, "error");
     }
@@ -414,6 +438,7 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
     }
 
     const result = { ...emptyResult, errors: [] as string[] };
+    let codexTrustReviewRequired = false;
     try {
       const statuses = await scanIntegrations(false);
       const supported = statuses.filter((status) => status.detected && (status.id === "codex" || status.id === "claude-code"));
@@ -436,6 +461,16 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
         && status.authorized
         && status.captureEnabled).length ?? 0;
 
+      if (supported.some((status) => status.id === "codex")) {
+        try {
+          const optimization = await activateCodexReduction();
+          if (optimization?.enabled) result.activeStrategies += 1;
+          codexTrustReviewRequired = optimization?.trustReviewRequired === true;
+        } catch (error) {
+          result.errors.push(`Codex output reduction: ${String(error)}`);
+        }
+      }
+
       if (supported.some((status) => status.id === "claude-code")) {
         try {
           if (await activateRtk()) result.activeStrategies += 1;
@@ -452,10 +487,12 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
       await refreshStatuses(false);
       if (result.errors.length) {
         host.toast(`Automatic protection started with ${result.errors.length} item${result.errors.length === 1 ? "" : "s"} needing attention.`, "error");
+      } else if (codexTrustReviewRequired) {
+        host.toast("Token reduction is installed. Open /hooks in Codex once to trust the Token Saver hook; Claude Code protection is already active where available.", "info");
       } else if (result.importedSessions) {
-        host.toast(`Automatic protection is active. Imported ${result.importedSessions} existing session${result.importedSessions === 1 ? "" : "s"}.`, "success");
+        host.toast(`Automatic token reduction is active. Imported ${result.importedSessions} existing session${result.importedSessions === 1 ? "" : "s"}.`, "success");
       } else {
-        host.toast("Automatic protection is active. Keep using Codex or Claude Code normally.", "success");
+        host.toast("Automatic token reduction is active. Keep using Codex or Claude Code normally.", "success");
       }
       return result;
     } finally {
@@ -467,6 +504,7 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
     const name = id === "codex" ? "Codex" : "Claude Code";
     if (!window.confirm(`Disconnect ${name}? Imported local sessions will remain in Token Saver.`)) return;
     try {
+      if (id === "codex") await disableCodexOutputOptimization();
       const disabled = id === "codex"
         ? await disableCodexHistoryConnector()
         : id === "claude-code"
