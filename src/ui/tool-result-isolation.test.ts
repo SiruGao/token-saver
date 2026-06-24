@@ -8,7 +8,7 @@ test("available isolation explains scope and safe exclusions", () => {
     enabled: false,
     configured: false,
     strategyId: "tool-result-isolation",
-    strategyVersion: "0.1.0",
+    strategyVersion: "0.2.0",
     thresholdChars: 24000,
     matcher: "Read|WebFetch",
     reversible: true,
@@ -23,6 +23,8 @@ test("available isolation explains scope and safe exclusions", () => {
   assert.match(html, /Enable safely/);
   assert.match(html, /Bash, file-writing tools, images/);
   assert.match(html, /not billing data/);
+  assert.match(html, /Clear vault/);
+  assert.match(html, /without changing strategy authorization/);
 });
 
 test("enabled isolation shows estimated savings and measured results", () => {
@@ -30,7 +32,7 @@ test("enabled isolation shows estimated savings and measured results", () => {
     enabled: true,
     configured: true,
     strategyId: "tool-result-isolation",
-    strategyVersion: "0.1.0",
+    strategyVersion: "0.2.0",
     thresholdChars: 24000,
     matcher: "Read|WebFetch",
     reversible: true,
@@ -46,4 +48,5 @@ test("enabled isolation shows estimated savings and measured results", () => {
   assert.match(html, /4/);
   assert.match(html, /80%/);
   assert.match(html, /Disable/);
+  assert.match(html, /Clear vault/);
 });
