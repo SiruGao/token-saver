@@ -36,12 +36,40 @@ test("keeps Strategy Hub in the main navigation", () => {
   ]);
 });
 
-test("first run presents a primary scan action", () => {
+test("first run presents one automatic protection action", () => {
   const html = dashboardView(workspace(undefined));
-  assert.match(html, /Reduce token usage across the AI tools you already use/);
-  assert.match(html, /Scan for AI tools/);
-  assert.match(html, /See sample results/);
-  assert.match(html, /Automatic mode is the default/);
+  assert.match(html, /Start once\. Keep using Codex and Claude Code normally/);
+  assert.match(html, /id="autopilot-start"/);
+  assert.match(html, /Start automatic protection/);
+  assert.match(html, /single setup approval/);
+  assert.doesNotMatch(html, /Review detected tools/);
+});
+
+test("connected empty workspace waits for automatic activity instead of repeating setup", () => {
+  const html = dashboardView(workspace(undefined, {
+    integrations: [{
+      id: "codex",
+      name: "OpenAI Codex",
+      detected: true,
+      connected: true,
+      detail: "Codex history sync enabled",
+    }],
+    connectorStatuses: [{
+      id: "codex",
+      detected: true,
+      authorized: true,
+      captureEnabled: true,
+      mode: "local-history",
+      dataQuality: "official-usage",
+      permissionSummary: "Read Codex rollout history",
+      pendingEvents: 0,
+      detail: "Codex local history sync is enabled.",
+    }],
+  }));
+  assert.match(html, /AUTOMATIC PROTECTION ACTIVE/);
+  assert.match(html, /Waiting for your next Codex or Claude Code session/);
+  assert.match(html, /without manual import or Sync now/);
+  assert.doesNotMatch(html, /id="autopilot-start"/);
 });
 
 test("detected connector remains disconnected until explicit approval", () => {
@@ -69,6 +97,7 @@ test("detected connector remains disconnected until explicit approval", () => {
   assert.match(html, /Detected/);
   assert.match(html, /Connect once/);
   assert.match(html, /Approve read-only access/);
+  assert.match(html, /normal setup path is the single Start automatic protection action/);
   assert.doesNotMatch(html, />Connected</);
 });
 
@@ -104,6 +133,7 @@ test("settings keep automatic and manual choices", () => {
   assert.match(html, /Choose compatible low-risk strategies for me/);
   assert.match(html, /I will control strategy selection/);
   assert.match(html, /Sync approved connectors on launch/);
+  assert.match(html, /rescan installations on every launch/);
 });
 
 test("shows signed install action without a release URL", () => {

@@ -1,6 +1,18 @@
 import { normalizeClaudeHookEvents } from "../adapters/claude-hooks";
-import { createId } from "./hash";
-import { analyzeSessions, parseTranscript } from "./import-router";
+import { syncFixProposals } from "../fixes/proposals";
+import { syncBaselineRecords } from "../proof/ledger";
+import { mergeStrategyRegistry } from "../strategies/registry";
+import { applyRuntimeDetections } from "../strategies/runtime";
+import type {
+  AgentId,
+  AgentSession,
+  ConnectorStatus,
+  NativeIntegration,
+  RtkAdapterStatus,
+  SessionEvent,
+  ToolResultIsolationStatus,
+  WorkspaceState,
+} from "../types";
 import {
   acknowledgeClaudeHookEvents,
   disableClaudeEventConnector,
@@ -11,21 +23,31 @@ import {
   readClaudeHookEvents,
   syncCodexHistory,
 } from "./connectors";
-import { syncFixProposals } from "../fixes/proposals";
-import { syncBaselineRecords } from "../proof/ledger";
-import { mergeStrategyRegistry } from "../strategies/registry";
-import type {
-  AgentId,
-  AgentSession,
-  ConnectorStatus,
-  SessionEvent,
-  WorkspaceState,
-} from "../types";
+import { createId } from "./hash";
+import { analyzeSessions, parseTranscript } from "./import-router";
+import {
+  enableRtkForClaude,
+  inspectRtkAdapter,
+  installRtkAdapter,
+} from "./rtk";
+import { detectNativeIntegrations, isTauriRuntime } from "./tauri";
+import {
+  enableToolResultIsolation,
+  inspectToolResultIsolation,
+} from "./tool-result-isolation";
 
 export interface ConnectorRuntimeHost {
   getState(): WorkspaceState;
   commit(next: WorkspaceState): void;
   toast(message: string, tone?: "success" | "error" | "info"): void;
+}
+
+export interface AutomaticProtectionResult {
+  detected: number;
+  connected: number;
+  importedSessions: number;
+  activeStrategies: number;
+  errors: string[];
 }
 
 export function mergeConnectorEvents(existing: SessionEvent[], incoming: SessionEvent[]): SessionEvent[] {
@@ -91,6 +113,21 @@ function stateWithStatuses(state: WorkspaceState, statuses: ConnectorStatus[]): 
   return { ...state, integrations, connectorStatuses: statuses };
 }
 
+function stateWithNativeIntegrations(state: WorkspaceState, detected: NativeIntegration[]): WorkspaceState {
+  const integrations = state.integrations.map((integration) => {
+    const match = detected.find((candidate) => candidate.id === integration.id);
+    if (!match) return integration;
+    return {
+      ...integration,
+      detected: match.detected,
+      connected: match.detected ? integration.connected : false,
+      path: match.path,
+      detail: match.detail,
+    };
+  });
+  return { ...state, integrations, lastScanAt: new Date().toISOString() };
+}
+
 function statusFor(state: WorkspaceState, id: AgentId): ConnectorStatus | undefined {
   return state.connectorStatuses?.find((status) => status.id === id);
 }
@@ -113,6 +150,37 @@ function applyImportedSessions(state: WorkspaceState, imported: AgentSession[]):
   return { ...state, sessions, findings, proofRecords, fixProposals };
 }
 
+function stateWithRtkStatus(state: WorkspaceState, status: RtkAdapterStatus): WorkspaceState {
+  const checkedAt = new Date().toISOString();
+  const runtimeStrategies = status.correctBinary
+    ? applyRuntimeDetections(
+        mergeStrategyRegistry(state.strategies),
+        [{ strategyId: "rtk", detected: status.installed, healthy: status.correctBinary, version: status.version, detail: status.detail }],
+        checkedAt,
+      )
+    : mergeStrategyRegistry(state.strategies);
+  const strategies = runtimeStrategies.map((strategy) => strategy.id === "rtk"
+    ? { ...strategy, enabled: status.configured }
+    : strategy);
+  return {
+    ...state,
+    strategies,
+    rtkAdapter: { ...status, checkedAt, busy: false, error: undefined },
+  };
+}
+
+function stateWithIsolationStatus(state: WorkspaceState, status: ToolResultIsolationStatus): WorkspaceState {
+  return {
+    ...state,
+    toolResultIsolation: {
+      ...status,
+      checkedAt: new Date().toISOString(),
+      busy: false,
+      error: undefined,
+    },
+  };
+}
+
 export function normalizeCodexSessionFiles(
   files: Awaited<ReturnType<typeof syncCodexHistory>>,
 ): AgentSession[] {
@@ -131,6 +199,8 @@ export function normalizeCodexSessionFiles(
 }
 
 export function createConnectorRuntime(host: ConnectorRuntimeHost) {
+  let automaticSetupBusy = false;
+
   async function refreshStatuses(show = false): Promise<ConnectorStatus[]> {
     try {
       const inspected = await inspectAgentConnectors();
@@ -141,6 +211,26 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
       return statuses;
     } catch (error) {
       if (show) host.toast(`Connector check failed: ${String(error)}`, "error");
+      return host.getState().connectorStatuses ?? [];
+    }
+  }
+
+  async function scanIntegrations(show = false): Promise<ConnectorStatus[]> {
+    try {
+      const detected = await detectNativeIntegrations();
+      if (!detected.length) {
+        if (show) host.toast("Tool detection requires the desktop application.", "error");
+        return host.getState().connectorStatuses ?? [];
+      }
+      host.commit(stateWithNativeIntegrations(host.getState(), detected));
+      const statuses = await refreshStatuses(false);
+      if (show) {
+        const found = detected.filter((item) => item.detected).length;
+        host.toast(`Found ${found} supported tool${found === 1 ? "" : "s"}.`, found ? "success" : "info");
+      }
+      return statuses;
+    } catch (error) {
+      if (show) host.toast(`Detection failed: ${String(error)}`, "error");
       return host.getState().connectorStatuses ?? [];
     }
   }
@@ -212,6 +302,30 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
     }
   }
 
+  async function authorize(id: AgentId, show = true): Promise<number> {
+    const status = statusFor(host.getState(), id);
+    if (!status?.detected) throw new Error(`${id === "codex" ? "Codex" : "Claude Code"} was not detected.`);
+
+    if (!status.authorized) {
+      const enabled = id === "codex"
+        ? await enableCodexHistoryConnector()
+        : id === "claude-code"
+          ? await enableClaudeEventConnector()
+          : undefined;
+      if (!enabled) throw new Error("This connector does not have an automatic adapter yet.");
+      const currentState = host.getState();
+      const statuses = mergeConnectorStatuses(currentState.connectorStatuses, [
+        ...(currentState.connectorStatuses ?? []).filter((item) => item.id !== id),
+        enabled,
+      ]);
+      host.commit(stateWithStatuses(currentState, statuses));
+    }
+
+    const imported = await sync(id, false);
+    if (show) host.toast(`${id === "codex" ? "Codex" : "Claude Code"} is connected and automatic sync is active.`, "success");
+    return imported;
+  }
+
   async function connect(id: AgentId): Promise<void> {
     const status = statusFor(host.getState(), id);
     if (!status?.detected) {
@@ -219,58 +333,133 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
       return;
     }
 
-    if (id === "codex") {
-      const approved = window.confirm([
-        "Connect Codex local history?",
-        "",
-        "Token Saver will read rollout JSONL files under ~/.codex to import completed and in-progress session history and persisted token usage.",
-        "",
-        "It will not modify Codex configuration, credentials, prompts, or sessions. This is local history sync, not live control of the Codex app.",
-        "",
-        "Continue?",
-      ].join("\n"));
-      if (!approved) return;
-      try {
-        const enabled = await enableCodexHistoryConnector();
-        const currentState = host.getState();
-        const statuses = mergeConnectorStatuses(currentState.connectorStatuses, [
-          ...(currentState.connectorStatuses ?? []).filter((item) => item.id !== "codex"),
-          enabled,
-        ]);
-        host.commit(stateWithStatuses(currentState, statuses));
-        await sync("codex");
-      } catch (error) {
-        host.toast(`Codex connection failed: ${String(error)}`, "error");
+    const approved = id === "codex"
+      ? window.confirm([
+          "Connect Codex local history?",
+          "",
+          "Token Saver will read rollout JSONL files under ~/.codex to import completed and in-progress session history and persisted token usage.",
+          "",
+          "It will not modify Codex configuration, credentials, prompts, or sessions. This is local history sync, not live control of the Codex app.",
+          "",
+          "Continue?",
+        ].join("\n"))
+      : window.confirm([
+          "Connect Claude Code lifecycle events?",
+          "",
+          "Token Saver will back up ~/.claude/settings.json and add reversible asynchronous hooks for session, prompt, tool-result, compaction, stop, and session-end events.",
+          "",
+          "Hook payloads can contain prompts, file paths, tool inputs, and tool results. They stay in ~/.token-saver, are imported locally, then acknowledged event files are deleted.",
+          "",
+          "The hooks produce no model-context output and do not approve, block, or modify tool calls.",
+          "",
+          "Continue?",
+        ].join("\n"));
+    if (!approved) return;
+
+    try {
+      await authorize(id);
+    } catch (error) {
+      host.toast(`${id === "codex" ? "Codex" : "Claude Code"} connection failed: ${String(error)}`, "error");
+    }
+  }
+
+  async function activateRtk(): Promise<boolean> {
+    const claudeDetected = host.getState().integrations.some((item) => item.id === "claude-code" && item.detected);
+    if (!claudeDetected) return false;
+
+    let status = await inspectRtkAdapter();
+    if (!status) return false;
+    if (!status.correctBinary) {
+      if (!status.canInstall) {
+        host.commit(stateWithRtkStatus(host.getState(), status));
+        return false;
       }
-      return;
+      status = await installRtkAdapter();
+    }
+    if (!status.configured && status.canEnable) status = await enableRtkForClaude();
+    host.commit(stateWithRtkStatus(host.getState(), status));
+    return status.configured;
+  }
+
+  async function activateIsolation(): Promise<boolean> {
+    const claudeDetected = host.getState().integrations.some((item) => item.id === "claude-code" && item.detected);
+    if (!claudeDetected) return false;
+
+    let status = await inspectToolResultIsolation();
+    if (!status) return false;
+    if (!status.enabled) status = await enableToolResultIsolation();
+    host.commit(stateWithIsolationStatus(host.getState(), status));
+    return status.enabled;
+  }
+
+  async function startAutomaticProtection(): Promise<AutomaticProtectionResult> {
+    const emptyResult: AutomaticProtectionResult = {
+      detected: 0,
+      connected: 0,
+      importedSessions: 0,
+      activeStrategies: 0,
+      errors: [],
+    };
+    if (automaticSetupBusy) return emptyResult;
+    if (!isTauriRuntime()) {
+      host.toast("Automatic protection requires the desktop application.", "error");
+      return emptyResult;
     }
 
-    if (id === "claude-code") {
-      const approved = window.confirm([
-        "Connect Claude Code lifecycle events?",
-        "",
-        "Token Saver will back up ~/.claude/settings.json and add reversible asynchronous hooks for session, prompt, tool-result, compaction, stop, and session-end events.",
-        "",
-        "Hook payloads can contain prompts, file paths, tool inputs, and tool results. They stay in ~/.token-saver, are imported locally, then acknowledged event files are deleted.",
-        "",
-        "The hooks produce no model-context output and do not approve, block, or modify tool calls.",
-        "",
-        "Continue?",
-      ].join("\n"));
-      if (!approved) return;
-      try {
-        const enabled = await enableClaudeEventConnector();
-        const currentState = host.getState();
-        const statuses = mergeConnectorStatuses(currentState.connectorStatuses, [
-          ...(currentState.connectorStatuses ?? []).filter((item) => item.id !== "claude-code"),
-          enabled,
-        ]);
-        host.commit(stateWithStatuses(currentState, statuses));
-        host.toast("Claude Code event capture is connected. New hooks are normally picked up automatically.", "success");
-        await sync("claude-code", false);
-      } catch (error) {
-        host.toast(`Claude Code connection failed: ${String(error)}`, "error");
+    automaticSetupBusy = true;
+    const button = document.querySelector<HTMLButtonElement>("#autopilot-start");
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Starting protection…";
+    }
+
+    const result = { ...emptyResult, errors: [] as string[] };
+    try {
+      const statuses = await scanIntegrations(false);
+      const supported = statuses.filter((status) => status.detected && (status.id === "codex" || status.id === "claude-code"));
+      result.detected = supported.length;
+      if (!supported.length) {
+        host.toast("No supported Codex or Claude Code installation was detected yet.", "error");
+        return result;
       }
+
+      for (const status of supported) {
+        try {
+          result.importedSessions += await authorize(status.id, false);
+        } catch (error) {
+          result.errors.push(`${status.id === "codex" ? "Codex" : "Claude Code"}: ${String(error)}`);
+        }
+      }
+
+      result.connected = host.getState().connectorStatuses?.filter((status) =>
+        (status.id === "codex" || status.id === "claude-code")
+        && status.authorized
+        && status.captureEnabled).length ?? 0;
+
+      if (supported.some((status) => status.id === "claude-code")) {
+        try {
+          if (await activateRtk()) result.activeStrategies += 1;
+        } catch (error) {
+          result.errors.push(`RTK: ${String(error)}`);
+        }
+        try {
+          if (await activateIsolation()) result.activeStrategies += 1;
+        } catch (error) {
+          result.errors.push(`Tool Result Isolation: ${String(error)}`);
+        }
+      }
+
+      await refreshStatuses(false);
+      if (result.errors.length) {
+        host.toast(`Automatic protection started with ${result.errors.length} item${result.errors.length === 1 ? "" : "s"} needing attention.`, "error");
+      } else if (result.importedSessions) {
+        host.toast(`Automatic protection is active. Imported ${result.importedSessions} existing session${result.importedSessions === 1 ? "" : "s"}.`, "success");
+      } else {
+        host.toast("Automatic protection is active. Keep using Codex or Claude Code normally.", "success");
+      }
+      return result;
+    } finally {
+      automaticSetupBusy = false;
     }
   }
 
@@ -307,10 +496,11 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
       element.onclick = () => void disconnect(element.dataset.connectorDisconnect as AgentId);
     });
     document.querySelector("#connector-refresh")?.addEventListener("click", () => void refreshStatuses(true));
+    document.querySelector("#autopilot-start")?.addEventListener("click", () => void startAutomaticProtection());
   }
 
   async function start(): Promise<void> {
-    const statuses = await refreshStatuses(false);
+    const statuses = await scanIntegrations(false);
     if (host.getState().settings.autoSyncConnectors === false) return;
     for (const status of statuses) {
       if (status.authorized && (status.id === "codex" || status.id === "claude-code")) {
@@ -319,5 +509,14 @@ export function createConnectorRuntime(host: ConnectorRuntimeHost) {
     }
   }
 
-  return { bind, connect, disconnect, refreshStatuses, start, sync };
+  return {
+    bind,
+    connect,
+    disconnect,
+    refreshStatuses,
+    scanIntegrations,
+    start,
+    startAutomaticProtection,
+    sync,
+  };
 }
