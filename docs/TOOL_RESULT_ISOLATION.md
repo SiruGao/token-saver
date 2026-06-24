@@ -14,7 +14,7 @@ Strategy Hub → Enable safely → Continue using Claude Code normally
 
 Enabling the strategy requires one explicit approval. Token Saver backs up `~/.claude/settings.json`, installs a stable local helper at `~/.token-saver/bin/token-saver-hook`, and registers one reversible synchronous `PostToolUse` hook.
 
-The hook points to the stable helper instead of the current application bundle path. Token Saver refreshes the helper when the desktop app starts, so moving or updating the `.app` does not leave Claude Code tied to an obsolete executable path.
+The hook points to the stable helper instead of the current application bundle path. Token Saver refreshes the helper when the desktop app starts, so moving or updating the `.app` does not leave Claude Code tied to an obsolete executable path. Existing Token Saver handlers that use the unique `--claude-tool-result-hook` argument are migrated to the stable path during enable or startup repair.
 
 ## Supported result sources
 
@@ -92,8 +92,8 @@ This remains an **Estimated** metric. It is not Anthropic billing data and is no
 - The headless helper exits successfully and emits no replacement when parsing, vault storage, compaction, event logging, or safety checks fail.
 - Full results remain local and are stored with restrictive file permissions on Unix systems.
 - Settings are backed up before enable and disable operations.
-- Enable, refresh, and disable are designed to be idempotent.
-- Disable removes only the exact Token Saver isolation handler and its helper; existing vault files and statistics remain until the user clears local strategy data.
+- Enable, refresh, migration, and disable are designed to be idempotent.
+- Disable removes only handlers carrying Token Saver's unique headless argument and removes the installed helper; existing vault files and statistics remain until the user clears local strategy data.
 - Canonical path checks prevent vault reads from being isolated again.
 
 ## Relationship to other modules
