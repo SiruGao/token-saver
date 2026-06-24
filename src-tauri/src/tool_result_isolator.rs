@@ -247,9 +247,8 @@ fn isolation_handler(command: &str) -> Value {
     })
 }
 
-fn is_isolation_handler(value: &Value, command: &str) -> bool {
+fn is_token_saver_handler(value: &Value) -> bool {
     value.get("type").and_then(Value::as_str) == Some("command")
-        && value.get("command").and_then(Value::as_str) == Some(command)
         && value
             .get("args")
             .and_then(Value::as_array)
@@ -257,6 +256,11 @@ fn is_isolation_handler(value: &Value, command: &str) -> bool {
                 args.len() == 1 && args[0].as_str() == Some("--claude-tool-result-hook")
             })
             .unwrap_or(false)
+}
+
+fn is_isolation_handler(value: &Value, command: &str) -> bool {
+    is_token_saver_handler(value)
+        && value.get("command").and_then(Value::as_str) == Some(command)
 }
 
 fn hook_configured_in(settings: &Value, command: &str) -> bool {
@@ -298,7 +302,7 @@ fn add_hook(settings: &mut Value, command: &str) -> Result<bool, String> {
         .as_array_mut()
         .ok_or_else(|| "Claude Code PostToolUse hooks must be an array".to_string())?;
 
-    if groups_array.iter().any(|group| {
+    let already_current = groups_array.iter().any(|group| {
         group
             .get("hooks")
             .and_then(Value::as_array)
@@ -308,8 +312,30 @@ fn add_hook(settings: &mut Value, command: &str) -> Result<bool, String> {
                     .any(|handler| is_isolation_handler(handler, command))
             })
             .unwrap_or(false)
-    }) {
-        return Ok(false);
+    });
+
+    let mut removed_stale = false;
+    for group in groups_array.iter_mut() {
+        let Some(handlers) = group.get_mut("hooks").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        let before = handlers.len();
+        handlers.retain(|handler| {
+            !is_token_saver_handler(handler)
+                || value_command_matches(handler, command)
+        });
+        removed_stale |= handlers.len() != before;
+    }
+    groups_array.retain(|group| {
+        group
+            .get("hooks")
+            .and_then(Value::as_array)
+            .map(|items| !items.is_empty())
+            .unwrap_or(true)
+    });
+
+    if already_current {
+        return Ok(removed_stale);
     }
 
     groups_array.push(json!({
@@ -319,7 +345,11 @@ fn add_hook(settings: &mut Value, command: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-fn remove_hook(settings: &mut Value, command: &str) -> Result<bool, String> {
+fn value_command_matches(value: &Value, command: &str) -> bool {
+    value.get("command").and_then(Value::as_str) == Some(command)
+}
+
+fn remove_hook(settings: &mut Value, _command: &str) -> Result<bool, String> {
     let Some(root) = settings.as_object_mut() else {
         return Ok(false);
     };
@@ -336,7 +366,7 @@ fn remove_hook(settings: &mut Value, command: &str) -> Result<bool, String> {
             continue;
         };
         let before = handlers.len();
-        handlers.retain(|handler| !is_isolation_handler(handler, command));
+        handlers.retain(|handler| !is_token_saver_handler(handler));
         removed |= handlers.len() != before;
     }
     groups.retain(|group| {
@@ -366,10 +396,32 @@ fn hook_configured() -> bool {
 }
 
 pub fn refresh_installed_helper() -> Result<(), String> {
-    if !hook_configured() {
+    let settings = read_settings()?;
+    let any_configured = settings
+        .get("hooks")
+        .and_then(Value::as_object)
+        .and_then(|hooks| hooks.get("PostToolUse"))
+        .and_then(Value::as_array)
+        .map(|groups| {
+            groups.iter().any(|group| {
+                group
+                    .get("hooks")
+                    .and_then(Value::as_array)
+                    .map(|handlers| handlers.iter().any(is_token_saver_handler))
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false);
+    if !any_configured {
         return Ok(());
     }
-    install_stable_helper().map(|_| ())
+
+    let command = install_stable_helper()?.to_string_lossy().to_string();
+    let mut migrated = settings;
+    if add_hook(&mut migrated, &command)? {
+        backup_and_write_settings(&migrated)?;
+    }
+    Ok(())
 }
 
 fn stats_from_log() -> IsolationStats {
@@ -885,5 +937,16 @@ mod tests {
         assert_eq!(first, second);
         assert_eq!(first.len(), 16);
         assert!(!first.contains("private-project"));
+    }
+
+    #[test]
+    fn identifies_stale_token_saver_handlers_by_unique_argument() {
+        let legacy = json!({
+            "type": "command",
+            "command": "/private/var/folders/AppTranslocation/Token Saver",
+            "args": ["--claude-tool-result-hook"]
+        });
+        assert!(is_token_saver_handler(&legacy));
+        assert!(!is_isolation_handler(&legacy, "/tmp/token-saver-hook"));
     }
 }
