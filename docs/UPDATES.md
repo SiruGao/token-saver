@@ -18,7 +18,19 @@ The updater endpoint is:
 https://github.com/SiruGao/token-saver/releases/latest/download/latest.json
 ```
 
-The updater configuration must always be a non-null object. Missing signing configuration must never prevent the application window from opening. Local or unsigned development builds fall back to the trusted GitHub Release page.
+The updater configuration must always be a non-null object. Missing signing configuration must never prevent the application window from opening. Local or unsigned development builds do not have signed in-app installation enabled.
+
+## Current platform coverage
+
+The production release workflow currently builds and publishes only:
+
+```text
+macOS Apple Silicon (aarch64-apple-darwin)
+```
+
+Windows, Linux, and Intel macOS are not yet part of the signed release matrix. They must not be advertised as supported in-app update targets until their installers and updater bundles are built and tested by the release workflow.
+
+The current macOS package uses ad-hoc application code signing. Tauri updater artifacts are separately signed for update verification, but the application is not yet Apple Developer ID signed or notarized. The initial installation can therefore still trigger macOS Gatekeeper warnings.
 
 ## One-time signing key setup
 
@@ -63,25 +75,24 @@ Application versions in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/t
 Set a new version:
 
 ```bash
-npm run release:version -- 1.0.1
+npm run release:version -- 1.1.0
 npm run check
 ```
 
-Commit the version change, then create and push the matching tag:
+Commit the version change to `main`. The `Release signed desktop updates` workflow detects the new package version, creates the matching `v<version>` GitHub Release when it does not already exist, and uploads:
 
-```bash
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-The `Release signed desktop updates` workflow builds macOS, Windows, and Linux artifacts and uploads:
-
-- normal installers;
-- updater bundles;
-- `.sig` signature files;
+- the macOS installer;
+- the macOS updater bundle;
+- its `.sig` signature;
 - `latest.json`.
 
-The first working signed release is a one-time manual bootstrap installation. Every later version can be installed from Token Saver Settings.
+The first working signed release is a one-time manual bootstrap installation. Every later compatible signed version can be checked and installed from Token Saver Settings. Pull requests, branch commits, and CI artifacts are not distributed through the in-app updater; they become available only after a formal versioned release is published.
+
+## Testing unreleased builds
+
+A user who wants to test a pull request before release must use a CI build artifact or build the desktop application locally. Installing an unreleased artifact is separate from the normal signed update channel and may require replacing the installed application manually.
+
+Do not ask ordinary users to test unreleased artifacts unless the test specifically requires the new branch code. Prefer the latest formal release for general product testing.
 
 ## Strategy metadata
 
