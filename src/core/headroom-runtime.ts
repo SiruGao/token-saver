@@ -90,10 +90,14 @@ export function mergeHeadroomStatus(
 }
 
 async function conflictSnapshot(state: WorkspaceState): Promise<ConflictSnapshot> {
-  const codex = await inspectCodexOutputOptimization().catch(() => undefined);
+  const [rtk, isolation, codex] = await Promise.all([
+    inspectRtkAdapter().catch(() => undefined),
+    inspectToolResultIsolation().catch(() => undefined),
+    inspectCodexOutputOptimization().catch(() => undefined),
+  ]);
   return {
-    rtkConfigured: state.rtkAdapter?.configured === true,
-    isolationEnabled: state.toolResultIsolation?.enabled === true,
+    rtkConfigured: rtk?.configured === true || state.rtkAdapter?.configured === true,
+    isolationEnabled: isolation?.enabled === true || state.toolResultIsolation?.enabled === true,
     codexReductionEnabled: codex?.enabled === true,
   };
 }
@@ -128,6 +132,8 @@ async function restoreOverlappingReducers(host: HeadroomRuntimeHost, snapshot: C
 }
 
 export function createHeadroomRuntime(host: HeadroomRuntimeHost) {
+  let automaticActivation: Promise<StrategyAdapterStatus | undefined> | undefined;
+
   async function refresh(show = false): Promise<StrategyAdapterStatus | undefined> {
     try {
       const status = await inspectHeadroomAdapter();
@@ -181,6 +187,8 @@ export function createHeadroomRuntime(host: HeadroomRuntimeHost) {
       await suspendOverlappingReducers(host, snapshot);
       const status = await applyHeadroomAdapter();
       host.commit(mergeHeadroomStatus(host.getState(), status, true));
+      const lateOverlap = await conflictSnapshot(host.getState());
+      await suspendOverlappingReducers(host, lateOverlap);
       if (options.show !== false) {
         host.toast("Headroom is active. Supported agent traffic is now routed through the local compression proxy.", "success");
       }
@@ -194,12 +202,21 @@ export function createHeadroomRuntime(host: HeadroomRuntimeHost) {
   }
 
   async function activateAutomatically(): Promise<StrategyAdapterStatus | undefined> {
-    const status = await inspectHeadroomAdapter();
-    if (!status) return undefined;
-    host.commit(mergeHeadroomStatus(host.getState(), status, status.active));
-    if (status.active) return status;
-    if (!status.canApply && !status.canInstall) return undefined;
-    return activate({ confirm: false, show: false });
+    if (automaticActivation) return automaticActivation;
+    automaticActivation = (async () => {
+      const status = await inspectHeadroomAdapter();
+      if (!status) return undefined;
+      host.commit(mergeHeadroomStatus(host.getState(), status, status.active));
+      if (status.active) {
+        await suspendOverlappingReducers(host, await conflictSnapshot(host.getState()));
+        return status;
+      }
+      if (!status.canApply && !status.canInstall) return undefined;
+      return activate({ confirm: false, show: false });
+    })().finally(() => {
+      automaticActivation = undefined;
+    });
+    return automaticActivation;
   }
 
   async function remove(): Promise<void> {
@@ -227,6 +244,22 @@ export function createHeadroomRuntime(host: HeadroomRuntimeHost) {
     document.querySelector("#headroom-refresh")?.addEventListener("click", () => void refresh(true));
     document.querySelector("#headroom-activate")?.addEventListener("click", () => void activate());
     document.querySelector("#headroom-remove")?.addEventListener("click", () => void remove());
+
+    const autopilot = document.querySelector("#autopilot-start");
+    autopilot?.addEventListener("click", () => {
+      window.setTimeout(() => {
+        void activateAutomatically().then((status) => {
+          if (status?.active) {
+            host.toast("Automatic routing selected Headroom for broad local context compression. Overlapping reducers were disabled.", "success");
+          }
+        });
+      }, 750);
+    });
+
+    const note = document.querySelector<HTMLElement>(".onboarding-note");
+    if (note) {
+      note.textContent = "This single approval may install the official RTK release and reviewed Headroom 0.27.0 in private local runtimes, back up client configuration, and apply reversible routes. Token Saver falls back safely when a broad engine is unavailable.";
+    }
   }
 
   return { activate, activateAutomatically, bind, refresh, remove };
