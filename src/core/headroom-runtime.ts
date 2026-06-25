@@ -253,7 +253,7 @@ export function createHeadroomRuntime(host: HeadroomRuntimeHost) {
             host.toast("Automatic routing selected Headroom for broad local context compression. Overlapping reducers were disabled.", "success");
           }
         });
-      }, 750);
+      }, 5000);
     });
 
     const note = document.querySelector<HTMLElement>(".onboarding-note");
