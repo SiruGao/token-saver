@@ -193,6 +193,15 @@ export function createHeadroomRuntime(host: HeadroomRuntimeHost) {
     }
   }
 
+  async function activateAutomatically(): Promise<StrategyAdapterStatus | undefined> {
+    const status = await inspectHeadroomAdapter();
+    if (!status) return undefined;
+    host.commit(mergeHeadroomStatus(host.getState(), status, status.active));
+    if (status.active) return status;
+    if (!status.canApply && !status.canInstall) return undefined;
+    return activate({ confirm: false, show: false });
+  }
+
   async function remove(): Promise<void> {
     if (!window.confirm([
       "Remove the managed Headroom route?",
@@ -220,5 +229,5 @@ export function createHeadroomRuntime(host: HeadroomRuntimeHost) {
     document.querySelector("#headroom-remove")?.addEventListener("click", () => void remove());
   }
 
-  return { activate, bind, refresh, remove };
+  return { activate, activateAutomatically, bind, refresh, remove };
 }
