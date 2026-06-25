@@ -7,7 +7,35 @@ type RtkStatus = {
   canEnable?: boolean;
 };
 
+type StoredWorkspace = {
+  integrations?: Array<{ id: string; connected?: boolean }>;
+  connectorStatuses?: Array<{ id: string; authorized?: boolean; captureEnabled?: boolean }>;
+};
+
 let busy = false;
+
+function reconcileStoredConnectionState(): void {
+  try {
+    const key = "token-saver.workspace.v1";
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as StoredWorkspace;
+    if (!Array.isArray(parsed.integrations) || !Array.isArray(parsed.connectorStatuses)) return;
+    const statuses = new Map(parsed.connectorStatuses.map((status) => [status.id, status]));
+    let changed = false;
+    for (const integration of parsed.integrations) {
+      const status = statuses.get(integration.id);
+      const connected = Boolean(status?.authorized && status?.captureEnabled);
+      if (integration.connected !== connected) {
+        integration.connected = connected;
+        changed = true;
+      }
+    }
+    if (changed) localStorage.setItem(key, JSON.stringify(parsed));
+  } catch {
+    // A stale workspace must never prevent the application from opening.
+  }
+}
 
 async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const api = await import("@tauri-apps/api/core");
@@ -68,19 +96,19 @@ function reloadAfterSuccess(message: string): void {
   window.setTimeout(() => window.location.reload(), 700);
 }
 
-async function connect(id: string): Promise<void> {
+async function connect(id: string, reload = true): Promise<void> {
   if (id === "claude-code") {
     show("Connecting Claude Code and installing the reversible local connector…");
     await invoke("enable_claude_event_connector_portable");
     await invoke("enable_tool_result_isolation").catch(() => undefined);
-    reloadAfterSuccess("Claude Code connected. Reloading the current status…");
+    if (reload) reloadAfterSuccess("Claude Code connected. Reloading the current status…");
     return;
   }
   if (id === "codex") {
     show("Connecting Codex and installing the reversible output-reduction hook…");
     await invoke("enable_codex_history_connector");
     await invoke("enable_codex_output_optimization").catch(() => undefined);
-    reloadAfterSuccess("Codex connected. Reloading the current status…");
+    if (reload) reloadAfterSuccess("Codex connected. Reloading the current status…");
     return;
   }
   throw new Error("This tool does not have an executable connector yet.");
@@ -101,13 +129,14 @@ async function installRtk(): Promise<void> {
 async function startAutomaticProtection(): Promise<void> {
   show("Scanning supported tools and starting reversible local optimization…");
   const statuses = await invoke<Array<{ id: string; detected: boolean }>>("inspect_agent_connectors");
-  const detected = statuses.filter((status) => status.detected);
+  const detected = statuses.filter((status) => status.detected && (status.id === "claude-code" || status.id === "codex"));
   if (!detected.length) throw new Error("No supported Claude Code or Codex installation was detected.");
 
   for (const status of detected) {
-    if (status.id === "claude-code") await connect("claude-code");
-    if (status.id === "codex") await connect("codex");
+    await connect(status.id, false);
   }
+
+  reloadAfterSuccess(`Connected ${detected.length} supported tool${detected.length === 1 ? "" : "s"}. Reloading status…`);
 }
 
 async function runAction(button: HTMLButtonElement): Promise<void> {
@@ -144,6 +173,8 @@ async function runAction(button: HTMLButtonElement): Promise<void> {
     restoreButton(button);
   }
 }
+
+reconcileStoredConnectionState();
 
 if (isTauriRuntime()) {
   statusHost();
