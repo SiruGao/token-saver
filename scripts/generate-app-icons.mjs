@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-const source = resolve("src-tauri/app-icon.png");
+const source = resolve("src-tauri/app-icon.svg");
 const output = resolve("src-tauri/icons");
 
 if (!existsSync(source)) {
