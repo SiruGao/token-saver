@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Token Saver application icon</title>
+  <desc id="desc">Four input streams converge through a control node into one optimized blue output.</desc>
+  <rect x="24" y="24" width="976" height="976" rx="210" fill="#fbf8f1" stroke="#e8e3da" stroke-width="4"/>
+  <circle cx="180" cy="350" r="22" fill="#1f242c"/>
+  <circle cx="180" cy="468" r="22" fill="#3f73d9"/>
+  <circle cx="180" cy="620" r="22" fill="#68b88f"/>
+  <circle cx="210" cy="742" r="22" fill="#1f242c"/>
+  <path d="M218 350H332C420 350 454 385 505 449L552 506" fill="none" stroke="#1f242c" stroke-width="22" stroke-linecap="butt"/>
+  <path d="M218 468H330C396 468 428 493 473 525C506 548 530 553 558 554" fill="none" stroke="#3f73d9" stroke-width="22" stroke-linecap="butt"/>
+  <path d="M218 620H328C397 620 430 592 474 561C506 538 530 536 558 536" fill="none" stroke="#68b88f" stroke-width="22" stroke-linecap="butt"/>
+  <path d="M248 742H348C416 742 450 707 500 645L552 584" fill="none" stroke="#1f242c" stroke-width="22" stroke-linecap="butt"/>
+  <circle cx="575" cy="548" r="52" fill="#1f242c"/>
+  <circle cx="575" cy="548" r="24" fill="#fbf8f1"/>
+  <path d="M627 548H835" fill="none" stroke="#3f73d9" stroke-width="22" stroke-linecap="butt"/>
+  <path d="M835 548L870 570H835Z" fill="#3f73d9"/>
+</svg>

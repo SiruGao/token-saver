@@ -56,6 +56,8 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
       - run: npm install
+      - name: Generate desktop icons
+        run: npm run icons:generate
       - run: npm run build
       - name: Check native application
         shell: bash
@@ -115,6 +117,13 @@ jobs:
           APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Token Saver.app"
           codesign --verify --deep --strict --verbose=4 "$APP_PATH" 2>&1 | tee codesign-verify.log
           codesign --display --verbose=4 "$APP_PATH" 2>&1 | tee codesign-details.log
+      - name: Verify packaged application icon
+        shell: bash
+        run: |
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Token Saver.app"
+          test -f "$APP_PATH/Contents/Resources/icon.icns"
+          test -s "$APP_PATH/Contents/Resources/icon.icns"
+          /usr/bin/stat -f "%z bytes %N" "$APP_PATH/Contents/Resources/icon.icns" | tee app-icon-verify.log
       - name: Upload macOS release diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -124,5 +133,6 @@ jobs:
             macos-release-build.log
             codesign-verify.log
             codesign-details.log
+            app-icon-verify.log
             src-tauri/tauri.release.conf.json
           if-no-files-found: warn
