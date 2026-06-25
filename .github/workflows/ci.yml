@@ -56,6 +56,8 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev
       - run: npm install
+      - name: Generate desktop icons
+        run: npm run icons:generate
       - run: npm run build
       - name: Check native application
         shell: bash
