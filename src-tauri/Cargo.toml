@@ -1,6 +1,6 @@
 [package]
 name = "token-saver-desktop"
-version = "1.0.5"
+version = "1.1.0-rc.2"
 description = "Local-first token efficiency desktop application for AI agents"
 authors = ["SiruGao"]
 edition = "2021"

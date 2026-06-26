@@ -3,9 +3,14 @@
 mod agent_connectors;
 mod app_updates;
 mod claude_collector;
+mod codex_output_optimizer;
+mod headroom_adapter;
 mod proof_db;
 mod rtk_adapter;
 mod rtk_installer;
+mod strategy_adapter;
+mod tool_result_isolator;
+mod tool_result_vault;
 
 use serde::Serialize;
 use std::{env, io::ErrorKind, path::PathBuf, process::Command};
@@ -151,7 +156,28 @@ fn open_release_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(url, None::<&str>).map_err(|error| error.to_string())
 }
 
+fn run_headless_hook_if_requested() -> bool {
+    let arguments: Vec<String> = env::args().collect();
+    if arguments.iter().any(|argument| argument == "--claude-tool-result-hook") {
+        if let Err(error) = tool_result_isolator::run_hook_from_stdin() {
+            eprintln!("Token Saver Claude tool-result hook skipped: {error}");
+        }
+        return true;
+    }
+    if arguments.iter().any(|argument| argument == "--codex-tool-result-hook") {
+        if let Err(error) = codex_output_optimizer::run_hook_from_stdin() {
+            eprintln!("Token Saver Codex tool-result hook skipped: {error}");
+        }
+        return true;
+    }
+    false
+}
+
 fn main() {
+    if run_headless_hook_if_requested() {
+        return;
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(
@@ -161,6 +187,12 @@ fn main() {
         )
         .setup(|app| {
             app.handle().plugin(app_updates::plugin())?;
+            if let Err(error) = tool_result_isolator::refresh_installed_helper() {
+                eprintln!("Token Saver could not refresh the installed Claude hook helper: {error}");
+            }
+            if let Err(error) = codex_output_optimizer::refresh_installed_helper() {
+                eprintln!("Token Saver could not refresh the installed Codex hook helper: {error}");
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -176,6 +208,18 @@ fn main() {
             agent_connectors::disable_claude_event_connector,
             agent_connectors::read_claude_hook_events,
             agent_connectors::acknowledge_claude_hook_events,
+            codex_output_optimizer::inspect_codex_output_optimization,
+            codex_output_optimizer::enable_codex_output_optimization,
+            codex_output_optimizer::disable_codex_output_optimization,
+            headroom_adapter::inspect_headroom_adapter,
+            headroom_adapter::preview_headroom_setup,
+            headroom_adapter::install_headroom_adapter,
+            headroom_adapter::apply_headroom_adapter,
+            headroom_adapter::remove_headroom_adapter,
+            tool_result_isolator::inspect_tool_result_isolation,
+            tool_result_isolator::enable_tool_result_isolation,
+            tool_result_isolator::disable_tool_result_isolation,
+            tool_result_vault::clear_tool_result_vault,
             rtk_adapter::inspect_rtk_adapter,
             rtk_adapter::preview_rtk_setup,
             rtk_adapter::install_rtk_adapter,

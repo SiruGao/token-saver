@@ -174,6 +174,85 @@ export interface RtkSetupPreview {
   source: string;
 }
 
+export interface StrategyTargetStatus {
+  id: string;
+  name: string;
+  detected: boolean;
+  routed: boolean;
+  detail: string;
+}
+
+export interface StrategySavingsSummary {
+  requests: number;
+  originalTokens: number;
+  deliveredTokens: number;
+  tokensSaved: number;
+  estimatedCostSavedUsd: number;
+  lastActivityAt?: string;
+  source: string;
+}
+
+export interface StrategyAdapterStatus {
+  strategyId: string;
+  adapterVersion: string;
+  upstreamVersion?: string;
+  installed: boolean;
+  compatible: boolean;
+  configured: boolean;
+  healthy: boolean;
+  active: boolean;
+  executablePath?: string;
+  managedRuntime: boolean;
+  canInstall: boolean;
+  canApply: boolean;
+  canRemove: boolean;
+  reversible: boolean;
+  risk: StrategyRisk;
+  detail: string;
+  setupDetail: string;
+  targets: StrategyTargetStatus[];
+  savings?: StrategySavingsSummary;
+  checkedAt?: string;
+  busy?: boolean;
+  error?: string;
+}
+
+export interface StrategyAdapterPreview {
+  strategyId: string;
+  title: string;
+  description: string;
+  changes: string[];
+  targets: string[];
+  reversible: boolean;
+  requiresRestart: boolean;
+  source: string;
+  pinnedVersion: string;
+  risk: StrategyRisk;
+}
+
+export interface IsolationStats {
+  isolatedResults: number;
+  originalChars: number;
+  deliveredChars: number;
+  estimatedSavedTokens: number;
+  lastIsolatedAt?: string;
+}
+
+export interface ToolResultIsolationStatus {
+  enabled: boolean;
+  configured: boolean;
+  strategyId: string;
+  strategyVersion: string;
+  thresholdChars: number;
+  matcher: string;
+  reversible: boolean;
+  detail: string;
+  stats: IsolationStats;
+  busy?: boolean;
+  error?: string;
+  checkedAt?: string;
+}
+
 export interface AppUpdateStatus {
   configured?: boolean;
   currentVersion: string;
@@ -269,6 +348,8 @@ export interface WorkspaceState {
   proofStorage?: ProofStorageStatus;
   fixProposals?: FixProposal[];
   rtkAdapter?: RtkAdapterStatus;
+  headroomAdapter?: StrategyAdapterStatus;
+  toolResultIsolation?: ToolResultIsolationStatus;
   settings: AppSettings;
   lastScanAt?: string;
   lastConnectorSyncAt?: string;

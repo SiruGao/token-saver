@@ -1,0 +1,83 @@
+name: Release candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "scripts/**"
+      - "package.json"
+      - ".github/workflows/release-candidate.yml"
+
+jobs:
+  macos-arm64-candidate:
+    if: startsWith(github.head_ref || github.ref_name, 'release/')
+    runs-on: macos-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      TOKEN_SAVER_UPDATER_PUBLIC_KEY: ${{ secrets.TOKEN_SAVER_UPDATER_PUBLIC_KEY }}
+      APPLE_SIGNING_IDENTITY: "-"
+      RUST_BACKTRACE: "1"
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm install
+      - name: Run release gates
+        run: npm run check
+      - name: Generate platform icons
+        run: npm run icons:generate
+      - name: Verify signing configuration
+        shell: bash
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          test -n "$TOKEN_SAVER_UPDATER_PUBLIC_KEY"
+          test "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD+x}" = x
+      - name: Prepare release configuration
+        run: npm run release:config
+      - name: Build signed candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run tauri build -- \
+            --target aarch64-apple-darwin \
+            --config src-tauri/tauri.release.conf.json \
+            2>&1 | tee release-candidate-build.log
+      - name: Verify bundle, signature, icon, and updater assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Token Saver.app"
+          test -d "$APP_PATH"
+          test -s "$APP_PATH/Contents/Resources/icon.icns"
+          codesign --verify --deep --strict --verbose=4 "$APP_PATH" 2>&1 | tee release-candidate-codesign.log
+          find src-tauri/target/aarch64-apple-darwin/release/bundle -maxdepth 3 -type f -print | sort | tee release-candidate-assets.log
+          find src-tauri/target/aarch64-apple-darwin/release/bundle -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.sig' \) | grep .
+      - name: Package installable test artifact
+        shell: bash
+        run: |
+          mkdir -p release-candidate
+          cp -R "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Token Saver.app" release-candidate/
+          find src-tauri/target/aarch64-apple-darwin/release/bundle -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.sig' \) -exec cp {} release-candidate/ \;
+          cp release-candidate-build.log release-candidate/
+          cp release-candidate-codesign.log release-candidate/
+          cp release-candidate-assets.log release-candidate/
+          ditto -c -k --sequesterRsrc --keepParent release-candidate Token-Saver-macOS-arm64-release-candidate.zip
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: Token-Saver-macOS-arm64-release-candidate
+          path: Token-Saver-macOS-arm64-release-candidate.zip
+          if-no-files-found: error
+          retention-days: 14
