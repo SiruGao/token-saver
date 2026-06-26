@@ -24,11 +24,12 @@ function snapshot(session: AgentSession, findings: Finding[]): ProofSnapshot {
 export function createBaselineRecord(
   session: AgentSession,
   findings: Finding[],
+  createdAt = new Date().toISOString(),
 ): ProofRecord {
   return {
     id: createId("proof", `${session.id}:baseline`),
     sessionId: session.id,
-    createdAt: new Date().toISOString(),
+    createdAt,
     status: "baseline",
     before: snapshot(session, findings),
     reversible: true,
@@ -52,8 +53,9 @@ export function syncBaselineRecords(
       .map((record) => [record.sessionId, record]),
   );
   const nonBaseline = existing.filter((record) => record.status !== "baseline");
-  const baselines = sessions.map((session) =>
-    baselineBySession.get(session.id) ?? createBaselineRecord(session, findings),
-  );
+  const baselines = sessions.map((session) => {
+    const previous = baselineBySession.get(session.id);
+    return createBaselineRecord(session, findings, previous?.createdAt);
+  });
   return [...baselines, ...nonBaseline];
 }
