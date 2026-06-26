@@ -91,10 +91,30 @@ function normalizeEvent(record: Row, index: number, fallback: string): SessionEv
   };
 }
 
+function explicitAgent(records: Row[]): AgentId | undefined {
+  for (const record of records.slice(0, 20)) {
+    const value = firstText(record.agent, row(record.metadata).agent).toLowerCase();
+    if (value === "codex") return "codex";
+    if (value === "claude" || value === "claude-code") return "claude-code";
+    if (value === "openclaw") return "openclaw";
+    if (value === "hermes") return "hermes";
+    if (value === "opencode") return "opencode";
+    if (value === "cursor") return "cursor";
+  }
+  return undefined;
+}
+
 function detectAgent(source: string, records: Row[]): AgentId {
-  const sample = `${source} ${records.slice(0, 20).map((item) => JSON.stringify(item)).join(" ")}`.toLowerCase();
-  if (sample.includes("claude")) return "claude-code";
+  const sourceLower = source.toLowerCase();
+  if (sourceLower.includes("/.codex/") || sourceLower.includes("\\.codex\\") || /rollout-.*\.jsonl$/i.test(source)) return "codex";
+  if (sourceLower.includes("/.claude/") || sourceLower.includes("\\.claude\\")) return "claude-code";
+
+  const declared = explicitAgent(records);
+  if (declared) return declared;
+
+  const sample = records.slice(0, 20).map((item) => JSON.stringify(item)).join(" ").toLowerCase();
   if (sample.includes("codex") || sample.includes("openai")) return "codex";
+  if (sample.includes("claude")) return "claude-code";
   if (sample.includes("openclaw")) return "openclaw";
   if (sample.includes("hermes")) return "hermes";
   if (sample.includes("opencode")) return "opencode";
@@ -129,6 +149,26 @@ function extractUsage(records: Row[], events: SessionEvent[]): TokenUsage {
   return total;
 }
 
+function isSyntheticInstruction(content: string): boolean {
+  const sample = content.trim().slice(0, 600).toLowerCase();
+  return sample.startsWith("# agents.md instructions")
+    || sample.includes("<instructions>")
+    || sample.includes("codegraph_start")
+    || sample.startsWith("<environment_context>")
+    || sample.startsWith("# repository guidelines");
+}
+
+function sessionTitle(agent: AgentId, events: SessionEvent[], source: string): string {
+  const userEvent = events.find((event) =>
+    event.role === "user"
+    && event.content.trim().length > 3
+    && !isSyntheticInstruction(event.content));
+  if (userEvent) return userEvent.content.replace(/\s+/g, " ").slice(0, 72);
+  if (agent === "codex") return "Codex session";
+  if (agent === "claude-code") return "Claude Code session";
+  return source.split(/[\\/]/).pop() ?? "Imported session";
+}
+
 export function parseTranscript(content: string, source: string): AgentSession {
   const records = parseRows(content);
   const fallback = new Date().toISOString();
@@ -136,14 +176,14 @@ export function parseTranscript(content: string, source: string): AgentSession {
   const startedAt = events[0]?.timestamp ?? fallback;
   const ending = events.at(-1)?.timestamp ?? startedAt;
   const duration = Math.max(0, Date.parse(ending) - Date.parse(startedAt));
-  const titleSource = events.find((event) => event.role === "user" && event.content.length > 3)?.content ?? source.split(/[\\/]/).pop() ?? "Imported session";
   const parts = source.split(/[\\/]/).filter(Boolean);
+  const agent = detectAgent(source, records);
 
   return {
     id: createId("session", `${source}:${stableHash(content)}`),
-    title: titleSource.replace(/\s+/g, " ").slice(0, 72),
+    title: sessionTitle(agent, events, source),
     project: parts.length > 1 ? parts.at(-2) ?? "Local project" : "Local project",
-    agent: detectAgent(source, records),
+    agent,
     source,
     startedAt,
     durationMinutes: Number.isFinite(duration) ? Math.max(1, Math.round(duration / 60000)) : 1,
